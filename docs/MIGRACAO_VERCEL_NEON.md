@@ -62,8 +62,7 @@ Este documento mapeia, no código real, o que precisa mudar. Regra de trabalho m
 | # | Story | Entrega verificável |
 |---|---|---|
 | M0 ✅ | Postgres de teste: serviço `db` (17) no compose, serviço na CI, driver `psycopg`, teste de conexão com trava `*_test` | 3 testes verdes no PG local (16) e na CI (17); sem a variável, são pulados |
-| M1 | `schema_pg.sql` + `db.py` com caminho PG + `conftest` parametrizado por `SALIM_TEST_DB_URL` (TRUNCATE entre testes) | schema carrega no PG; a suíte inteira roda no PG e a **lista vermelha vira o checklist da M2–M6** |
-| M1b | Triggers plpgsql, views corrigidas, tipos reais | testes de schema/imutabilidade/integridade verdes no PG |
+| M1 ✅ | `schema_pg.sql` (tipos reais, identity, triggers plpgsql, views corrigidas) + `db.py` com caminho PG + `conftest` parametrizado por `SALIM_TEST_DB_URL` (TRUNCATE entre testes) | schema carrega no PG; imutabilidade e integridade já passam; suíte no PG: **197 verdes, 52 vermelhas** (lista abaixo) |
 | M2 | Casts e SQL cru em `reports.py` e `nlentry.py` (SUM→BIGINT, GROUP BY, datas) | testes de DRE, caixa, orçamento verdes no PG |
 | M3 | `salim.migrate` + `schema_migrations` + seed fora da partida | `create_app` não escreve no banco; migrate idempotente |
 | M4 | Estado do bot em tabelas (`bot_pending`, `bot_seen`) | testes do Telegram/WhatsApp verdes, reinício do processo não perde proposta |
@@ -73,6 +72,18 @@ Este documento mapeia, no código real, o que precisa mudar. Regra de trabalho m
 | M8 | Entrada Vercel + `vercel.json` + variáveis + `setWebhook` do Telegram | `/health` e login em HTTPS na URL da Vercel; `/saldo` no Telegram |
 | M9 | Workflow de backup (`pg_dump` + criptografia + envio) + script de restauração | restauração feita em um Postgres limpo, conferindo o somatório do razão |
 | M10 | Corte: remover ramo SQLite, `backup.py` antigo, Caddy; docs e README | suíte só em PG; compose vira "dev local" |
+
+## 4b. Lista vermelha da M1 (suíte no Postgres: 197 verdes, 52 falhas)
+
+| Causa | Falhas | Onde | Story |
+|---|---|---|---|
+| `GROUP BY` incompleto na consulta de títulos com saldo (`accounts.id` fora do agrupamento) | ~40 | `obligations.py` | M2 |
+| `is_cash = 1` em SQL cru (boolean = integer) | 5 | `reports.py` | M2 |
+| `GROUP BY` incompleto no DRE (`a.name`) | 3 | `reports.py` | M2 |
+| Tradução de erro depende da mensagem do SQLite ("UNIQUE constraint failed") | ~2 | `ledger.py`/`app.py` (código duplicado vira 422 em vez de 409) | M2 |
+| Soma devolve `numeric` (Decimal): JSON sai como texto | ~2 | queries com `func.sum` sobre BIGINT | M2 |
+
+Testes que dependem do SQLite por natureza (backup pela API do SQLite, `test_db.py`) seguem só em SQLite até o corte (M10).
 
 ## 5. Riscos e o que não será resolvido aqui
 

@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from salim.app import create_app
 from salim.auth import AuthConfig, LoginLimiter, hash_password, make_session, read_session, verify_password
-from salim.db import make_session_factory
+from conftest import new_factory
 
 SEGREDO = "x" * 40
 
@@ -69,7 +69,7 @@ def test_config_pelo_ambiente_e_validacoes(monkeypatch):
 def test_app_sem_configuracao_de_auth_nao_sobe(monkeypatch):
     for k in ("SALIM_PASSWORD_HASH", "SALIM_AUTH_DISABLED"):
         monkeypatch.delenv(k, raising=False)
-    factory = make_session_factory("sqlite://")
+    factory = new_factory()
     with pytest.raises(RuntimeError, match="SALIM_PASSWORD_HASH"):
         create_app(factory)
     factory.kw["bind"].dispose()
@@ -78,7 +78,7 @@ def test_app_sem_configuracao_de_auth_nao_sobe(monkeypatch):
 def test_telegram_com_token_exige_segredo_do_webhook(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:abc")
     monkeypatch.delenv("TELEGRAM_WEBHOOK_SECRET", raising=False)
-    factory = make_session_factory("sqlite://")
+    factory = new_factory()
     with pytest.raises(RuntimeError, match="TELEGRAM_WEBHOOK_SECRET"):
         create_app(factory)
     factory.kw["bind"].dispose()
@@ -87,7 +87,7 @@ def test_telegram_com_token_exige_segredo_do_webhook(monkeypatch):
 # ---- app protegido
 @pytest.fixture
 def app_client():
-    factory = make_session_factory("sqlite://")
+    factory = new_factory()
     app = create_app(factory, auth=cfg(), telegram_sender=lambda *a: None, telegram_allowed_ids={1})
     with TestClient(app, follow_redirects=False) as c:
         yield c
@@ -131,7 +131,7 @@ def test_login_certo_abre_tudo_e_cookie_e_seguro(app_client):
 
 
 def test_cookie_secure_quando_configurado():
-    factory = make_session_factory("sqlite://")
+    factory = new_factory()
     with TestClient(create_app(factory, auth=cfg(cookie_secure=True)), follow_redirects=False) as c:
         assert "secure" in entrar(c).headers["set-cookie"].lower()
     factory.kw["bind"].dispose()
@@ -155,7 +155,7 @@ def test_token_de_api(app_client):
 
 
 def test_token_de_api_desligado_quando_nao_configurado():
-    factory = make_session_factory("sqlite://")
+    factory = new_factory()
     with TestClient(create_app(factory, auth=cfg(api_token=None)), follow_redirects=False) as c:
         assert c.get("/accounts", headers={"Authorization": "Bearer "}).status_code == 401
     factory.kw["bind"].dispose()

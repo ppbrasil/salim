@@ -14,12 +14,17 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U salim -d salim_test"
           --health-interval 5s --health-timeout 3s --health-retries 10
-    env:
-      SALIM_TEST_DB_URL: postgresql+psycopg://salim:salim@127.0.0.1:5432/salim_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.13" }
       - run: pip install -e ".[dev]"
-      - run: python -m pytest -q -W error
+      - name: Suíte em SQLite (bloqueante)
+        run: python -m pytest -q -W error
+      # Migração para Postgres (docs/MIGRACAO_VERCEL_NEON.md): informativo até a M5; vira bloqueante e troca o SQLite no corte (M10).
+      - name: Suíte em Postgres 17 (informativa)
+        continue-on-error: true
+        env:
+          SALIM_TEST_DB_URL: postgresql+psycopg://salim:salim@127.0.0.1:5432/salim_test
+        run: python -m pytest -q -W error
       - run: docker build -t salim .

@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from salim.app import create_app
 from salim.chart import seed_chart
 from salim.channels import TelegramChannel, WhatsAppChannel
-from salim.db import make_session_factory
+from conftest import new_factory
 from salim.ledger import Entry, balance, post_transaction
 from salim.telegram import Bot
 
@@ -102,7 +102,7 @@ def test_whatsapp_varias_mensagens_no_mesmo_envio(session, ctx_factory):
 
 @pytest.fixture
 def wa_http():
-    factory = make_session_factory("sqlite://")
+    factory = new_factory()
     enviadas = []
     app = create_app(factory, whatsapp_sender=lambda to, texto: enviadas.append((to, texto)),
                      whatsapp_allowed={"5541999990000"}, whatsapp_verify_token="verifica", whatsapp_app_secret="segredo")

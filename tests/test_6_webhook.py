@@ -2,14 +2,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from salim.app import create_app
-from salim.db import make_session_factory
+from conftest import new_factory
 
 DONO = 111
 
 
 @pytest.fixture
 def tg():
-    factory = make_session_factory("sqlite://")
+    factory = new_factory()
     enviadas = []
     app = create_app(factory, telegram_sender=lambda chat, texto: enviadas.append((chat, texto)),
                      telegram_allowed_ids={DONO}, telegram_secret="s3gredo")
@@ -56,7 +56,7 @@ def test_webhook_fluxo_completo_com_reenvio(tg):
 
 
 def test_sem_configuracao_o_webhook_nega_tudo():
-    factory = make_session_factory("sqlite://")
+    factory = new_factory()
     with TestClient(create_app(factory, telegram_sender=lambda *a: None, telegram_allowed_ids=set())) as c:
         assert c.post("/telegram/webhook", json=update("/saldo")).status_code == 200
     factory.kw["bind"].dispose()
@@ -65,7 +65,7 @@ def test_sem_configuracao_o_webhook_nega_tudo():
 def test_falha_no_envio_nao_vira_erro_500():
     def quebrado(chat, texto):
         raise OSError("sem rede")
-    factory = make_session_factory("sqlite://")
+    factory = new_factory()
     app = create_app(factory, telegram_sender=quebrado, telegram_allowed_ids={DONO})
     with TestClient(app) as c:
         assert c.post("/telegram/webhook", json=update("/saldo")).status_code == 200   # senão o Telegram reenvia em loop
