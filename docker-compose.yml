@@ -1,0 +1,13 @@
+services:
+  salim:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      SALIM_DB_URL: sqlite:////data/salim.db
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ALLOWED_IDS: ${TELEGRAM_ALLOWED_IDS:-}
+    volumes:
+      - salim-data:/data
+    restart: unless-stopped
+volumes:
+  salim-data:
