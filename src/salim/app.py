@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from salim import ledger, obligations as obl
+from salim import budget as bud, ledger, obligations as obl, reports
 from salim.chart import seed_chart
 from salim.db import make_session_factory
 from salim.models import Account, AccountType
@@ -139,8 +139,16 @@ def business_errors():
         raise HTTPException(409, f"conta já existe: {e}")
     except ledger.AccountNotFoundError as e:
         raise HTTPException(422, f"conta inexistente: {e}")
-    except (ledger.InvalidAccountError, ledger.InvalidTransactionError, obl.ObligationError) as e:
+    except (ledger.InvalidAccountError, ledger.InvalidTransactionError, obl.ObligationError, bud.BudgetError) as e:
         raise HTTPException(422, str(e))
+
+
+class BudgetIn(BaseModel):
+    account_code: str
+    amount_cents: int
+    month: date | None = None
+    profile: str = "spread"
+    day_of_month: int | None = None
 
 
 class TransactionIn(BaseModel):
@@ -269,6 +277,33 @@ def create_app(session_factory=None) -> FastAPI:
             o = obl.register_reimbursable_expense(session, **body.model_dump())
             return obl.get_obligation(session, o.id, date.today())
 
+    # ---------------------------------------------------------------- relatórios e orçamento
+    @app.get("/reports/dre")
+    def api_dre(start: date, end: date | None = None, session=Depends(get_session)):
+        r = reports.dre(session, start, end)
+        return {"start": r.start, "end": r.end, "income_cents": r.income_cents, "expense_cents": r.expense_cents,
+                "result_cents": r.result_cents, "lines": [vars(l) for l in r.lines]}
+
+    @app.get("/reports/cash")
+    def api_cash(start: date, end: date, session=Depends(get_session)):
+        return [{**vars(m), "net_cents": m.net_cents} for m in reports.cash_executed(session, start, end)]
+
+    @app.get("/reports/cash-future")
+    def api_cash_future(today: date | None = None, months: int = 6, session=Depends(get_session)):
+        return [{**vars(m), "net_cents": m.net_cents} for m in reports.cash_future(session, today or date.today(), months)]
+
+    @app.put("/budget")
+    def api_set_budget(body: BudgetIn, session=Depends(get_session)):
+        with business_errors():
+            b = bud.set_budget(session, body.account_code, body.amount_cents, month=body.month,
+                               profile=body.profile, day_of_month=body.day_of_month)
+        return {"id": b.id, "amount_cents": b.amount_cents, "profile": b.profile}
+
+    @app.get("/budget")
+    def api_budget(month: date | None = None, today: date | None = None, session=Depends(get_session)):
+        hoje = today or date.today()
+        return [vars(l) for l in bud.budget_vs_actual(session, month or hoje, hoje)]
+
     # ---------------------------------------------------------------- telas
     @app.get("/", include_in_schema=False)
     def root():
@@ -299,6 +334,46 @@ def create_app(session_factory=None) -> FastAPI:
             "pagar": pagar, "receber": receber, "hoje": hoje,
             "total_pagar": sum(v.balance_cents for v in pagar if v.balance_cents > 0),
             "total_receber": sum(v.balance_cents for v in receber if v.balance_cents > 0)})
+
+    @app.get("/ui/reports/dre")
+    def ui_dre(request: Request, start: date | None = None, end: date | None = None, session=Depends(get_session)):
+        inicio = start or ledger.month_start(date.today())
+        return templates.TemplateResponse(request, "dre.html", {"r": reports.dre(session, inicio, end)})
+
+    @app.get("/ui/reports/cash")
+    def ui_cash(request: Request, today: date | None = None, session=Depends(get_session)):
+        hoje = today or date.today()
+        inicio = ledger.month_start(hoje)
+        passado = reports.cash_executed(session, date(inicio.year - (inicio.month <= 5), (inicio.month - 6) % 12 + 1, 1), inicio)
+        return templates.TemplateResponse(request, "cash.html", {
+            "executado": passado, "projetado": reports.cash_future(session, hoje, 6), "hoje": hoje})
+
+    def _budget_page(request, session, month, hoje, form=None, erro=None, status=200):
+        contas = [c for _, c in ledger.account_tree(session) if c.type in (AccountType.EXPENSE, AccountType.INCOME)]
+        return templates.TemplateResponse(request, "budget.html", {
+            "linhas": bud.budget_vs_actual(session, month, hoje), "month": ledger.month_start(month), "contas": contas,
+            "form": form or {}, "erro": erro}, status_code=status)
+
+    @app.get("/ui/budget")
+    def ui_budget(request: Request, month: date | None = None, today: date | None = None, session=Depends(get_session)):
+        hoje = today or date.today()
+        return _budget_page(request, session, month or hoje, hoje)
+
+    @app.post("/ui/budget")
+    async def ui_set_budget(request: Request, session=Depends(get_session)):
+        form = dict((await request.form()).items())
+        try:
+            try:
+                valor = parse_brl(form.get("amount", ""))
+            except ValueError:
+                raise bud.BudgetError("valor inválido")
+            dia = int(form["day_of_month"]) if form.get("day_of_month") else None
+            mes = date.fromisoformat(form["month"]) if form.get("month") else None
+            bud.set_budget(session, form.get("account_code", "").strip(), valor, month=mes,
+                           profile=form.get("profile", "spread"), day_of_month=dia)
+        except bud.BudgetError as e:
+            return _budget_page(request, session, date.today(), date.today(), form, str(e), 422)
+        return RedirectResponse("/ui/budget", status_code=303)
 
     def _form_page(request, session, form, erro=None, status=200):
         contas = [c for _, c in ledger.account_tree(session) if not c.is_group]

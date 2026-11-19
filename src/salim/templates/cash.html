@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Caixa · Salim{% endblock %}
+{% block content %}
+<h1>Fluxo de caixa</h1>
+<h2>Executado</h2>
+<table>
+  <thead><tr><th>Mês</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Líquido</th></tr></thead>
+  <tbody>{% for m in executado %}
+    <tr><td>{{ (m.month ~ '-01') | mes }}</td><td class="num">{{ m.inflow_cents | brl }}</td>
+        <td class="num">{{ m.outflow_cents | brl }}</td><td class="num {{ 'neg' if m.net_cents < 0 }}">{{ m.net_cents | brl }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+<h2>Projetado <span class="muted">(a partir de {{ hoje.isoformat() | data }}; títulos na data planejada ou no vencimento)</span></h2>
+<table>
+  <thead><tr><th>Mês</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Já vencido</th><th class="num">Saldo ao fim</th></tr></thead>
+  <tbody>{% for m in projetado %}
+    <tr><td>{{ (m.month ~ '-01') | mes }}</td><td class="num">{{ m.inflow_cents | brl }}</td><td class="num">{{ m.outflow_cents | brl }}</td>
+        <td class="num {{ 'atrasada' if m.late_cents }}">{{ m.late_cents | brl }}</td>
+        <td class="num {{ 'neg' if m.closing_cents < 0 }}">{{ m.closing_cents | brl }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% endblock %}

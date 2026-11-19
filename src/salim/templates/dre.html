@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}DRE · Salim{% endblock %}
+{% block content %}
+<h1>DRE por competência</h1>
+<p class="muted">{{ r.start.isoformat() | mes }}{% if r.end != r.start %} a {{ r.end.isoformat() | mes }}{% endif %} · inclui o que ainda não foi pago</p>
+<form method="get"><label>De <input type="date" name="start" value="{{ r.start.isoformat() }}"></label>
+  <label>até <input type="date" name="end" value="{{ r.end.isoformat() }}"></label> <button>Ver</button></form>
+<table>
+  <thead><tr><th>Conta</th><th class="num">Valor</th></tr></thead>
+  <tbody>
+  <tr class="group"><td>Receitas</td><td class="num">{{ r.income_cents | brl }}</td></tr>
+  {% for l in r.lines if l.type == 'income' %}<tr><td>{{ l.code }} {{ l.name }}</td><td class="num">{{ l.amount_cents | brl }}</td></tr>{% endfor %}
+  <tr class="group"><td>Despesas</td><td class="num">{{ r.expense_cents | brl }}</td></tr>
+  {% for l in r.lines if l.type == 'expense' %}<tr><td>{{ l.code }} {{ l.name }}</td><td class="num">{{ l.amount_cents | brl }}</td></tr>{% endfor %}
+  <tr class="group"><td>Resultado</td><td class="num {{ 'neg' if r.result_cents < 0 }}">{{ r.result_cents | brl }}</td></tr>
+  </tbody>
+</table>
+{% endblock %}

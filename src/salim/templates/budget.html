@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Orçamento · Salim{% endblock %}
+{% block content %}
+<h1>Orçamento · {{ month.isoformat() | mes }}</h1>
+<form method="get"><label>Mês <input type="date" name="month" value="{{ month.isoformat() }}"></label> <button>Ver</button></form>
+<table>
+  <thead><tr><th>Conta</th><th>Perfil</th><th class="num">Orçado</th><th class="num">Realizado</th><th class="num">Restante</th><th class="num">%</th><th>Situação</th></tr></thead>
+  <tbody>{% for l in linhas %}
+    <tr><td>{{ l.code }} {{ l.name }}</td><td class="muted">{{ 'pontual' if l.profile == 'lump' else 'diluído' }}</td>
+        <td class="num">{{ l.budget_cents | brl }}</td><td class="num">{{ l.actual_cents | brl }}</td>
+        <td class="num {{ 'neg' if l.remaining_cents < 0 }}">{{ l.remaining_cents | brl }}</td>
+        <td class="num">{{ l.pct_used if l.pct_used is not none else '—' }}%</td>
+        <td class="{{ 'atrasada' if l.alert != 'ok' }}">{{ l.alert.replace('_', ' ') }}</td></tr>
+  {% else %}<tr><td colspan="7" class="muted">Nenhuma meta definida.</td></tr>{% endfor %}</tbody>
+</table>
+<h2>Definir meta</h2>
+{% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+<form method="post" action="/ui/budget">
+  <label>Conta <select name="account_code">{% for c in contas %}
+    <option value="{{ c.code }}" {{ 'selected' if form.get('account_code') == c.code }}>{{ c.code }} {{ c.name }}</option>{% endfor %}</select></label>
+  <label>Valor <input class="val" name="amount" value="{{ form.get('amount', '') }}" placeholder="900,00"></label>
+  <label>Perfil <select name="profile"><option value="spread">diluído</option><option value="lump" {{ 'selected' if form.get('profile') == 'lump' }}>pontual</option></select></label>
+  <label>Dia <input name="day_of_month" size="2" value="{{ form.get('day_of_month', '') }}"></label>
+  <label>Só no mês <input type="date" name="month" value="{{ form.get('month', '') }}"></label>
+  <button>Salvar</button>
+</form>
+<p class="muted">Sem "só no mês", a meta vale como mês padrão; com ele, vale apenas para aquele mês.</p>
+{% endblock %}
