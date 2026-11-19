@@ -161,7 +161,7 @@ class TransactionIn(BaseModel):
 
 
 def _default_factory():
-    url = os.environ.get("SALIM_DB_URL", "sqlite:///data/salim.db")
+    url = os.environ.get("DATABASE_URL") or os.environ.get("SALIM_DB_URL") or "sqlite:///data/salim.db"
     if url.startswith("sqlite:///") and ":memory:" not in url:
         Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
     return make_session_factory(url)

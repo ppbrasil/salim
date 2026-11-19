@@ -68,7 +68,7 @@ Este documento mapeia, no código real, o que precisa mudar. Regra de trabalho m
 | M4 ✅ | Estado do bot em tabelas (`bot_pending`, `bot_seen`) | testes do Telegram/WhatsApp verdes, reinício do processo não perde proposta |
 | M5 ✅ | `LoginLimiter` em tabela | trava persiste entre instâncias (teste com duas instâncias) |
 | M6 ✅ | `salim.clock.today()` em America/Sao_Paulo | teste às 23h30 BRT devolve o dia local, não o UTC |
-| M7 | Engine serverless (NullPool, pooler, retry de cold start, `DATABASE_URL`) | teste de conexão contra Neon real (manual, uma vez) |
+| M7 ✅* | Engine serverless (NullPool, pooler, retry de cold start, `DATABASE_URL`) | teste de conexão contra Neon real (manual, uma vez) |
 | M8 | Entrada Vercel + `vercel.json` + variáveis + `setWebhook` do Telegram | `/health` e login em HTTPS na URL da Vercel; `/saldo` no Telegram |
 | M9 | Workflow de backup (`pg_dump` + criptografia + envio) + script de restauração | restauração feita em um Postgres limpo, conferindo o somatório do razão |
 | M10 | Corte: remover ramo SQLite, `backup.py` antigo, Caddy; docs e README | suíte só em PG; compose vira "dev local" |
