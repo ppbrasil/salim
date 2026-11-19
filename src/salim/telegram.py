@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from salim import ledger, nlentry, proposals, queries
+from salim.channels import Incoming, TelegramChannel
 from salim.money import brl, parse_brl
 
 AJUDA = ("Comandos:\n/saldo [conta] — saldo do caixa ou de uma conta\n/orcamento — orçado × realizado do mês\n"
@@ -36,20 +37,22 @@ def _dm(iso: str) -> str:
 
 class Bot:
     def __init__(self, session_factory, allowed_ids: set[int], clock=date.today, remember_updates: int = 1000,
-                 interpreter=None):
+                 interpreter=None, channel=None):
         self.sf, self.allowed, self.clock, self.interpreter = session_factory, set(allowed_ids), clock, interpreter
+        self.channel = channel or TelegramChannel()
         self.pending: dict[int, dict] = {}
         self.seen: OrderedDict[int, None] = OrderedDict()
         self.remember = remember_updates
 
     # ------------------------------------------------------------ entrada
-    def handle(self, update: dict) -> list[Reply]:
-        m = update.get("message") or {}
-        remetente, chat = (m.get("from") or {}).get("id"), (m.get("chat") or {}).get("id")
-        texto = (m.get("text") or "").strip()
-        if remetente not in self.allowed or chat is None or not texto:
+    def handle(self, native: dict) -> list[Reply]:
+        """Recebe a entrega no formato do canal e devolve as respostas a enviar."""
+        return [r for inc in self.channel.parse(native) for r in self._message(inc)]
+
+    def _message(self, inc: Incoming) -> list[Reply]:
+        if inc.user_id not in self.allowed:
             return []
-        uid = update.get("update_id")
+        chat, uid, texto = inc.chat_id, inc.msg_id, inc.text
         if uid is not None:
             if uid in self.seen:
                 return []
@@ -134,7 +137,7 @@ class Bot:
         return self._mostrar(chat, uid, p)
 
     def _mostrar(self, chat, uid, p):
-        self.pending[chat] = {"proposal": p, "ref": f"tg:{chat}:{uid}"}
+        self.pending[chat] = {"proposal": p, "ref": f"{self.channel.ref_prefix}:{chat}:{uid}"}
         d, c = p["entries"]
         return (f"Lançamento {_dm(p['event_date'])} — {p['description']}\n"
                 f"Débito: {d['account_name']} ({d['account_code']}) {brl(d['amount_cents'])}\n"
@@ -147,7 +150,7 @@ class Bot:
             return "Nada pendente."
         with self.sf() as s:
             try:
-                r = proposals.confirm_transaction(s, item["proposal"], source="telegram", external_ref=item["ref"])
+                r = proposals.confirm_transaction(s, item["proposal"], source=self.channel.name, external_ref=item["ref"])
             except ValueError as e:
                 return f"Não registrei: {e}"
         return "Esse lançamento já estava registrado." if r["duplicate"] else f"Registrado (#{r['transaction_id']})."

@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import logging
 import os
 from datetime import date
@@ -6,11 +8,12 @@ from pathlib import Path
 from contextlib import contextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from salim.money import brl, parse_brl
+from salim.channels import WhatsAppChannel, WhatsAppSender
 from salim.telegram import Bot, HttpSender
 from salim import bankimport as imp, budget as bud, ledger, obligations as obl, reports
 from salim.chart import seed_chart
@@ -165,8 +168,13 @@ def _env_ids() -> set[int]:
     return {int(x) for x in os.environ.get("TELEGRAM_ALLOWED_IDS", "").split(",") if x.strip()}
 
 
-def create_app(session_factory=None, *, telegram_sender=None, telegram_allowed_ids=None,
-               telegram_secret=None) -> FastAPI:
+def _env_numbers() -> set[str]:
+    return {x.strip() for x in os.environ.get("WHATSAPP_ALLOWED_NUMBERS", "").split(",") if x.strip()}
+
+
+def create_app(session_factory=None, *, telegram_sender=None, telegram_allowed_ids=None, telegram_secret=None,
+               whatsapp_sender=None, whatsapp_allowed=None, whatsapp_verify_token=None,
+               whatsapp_app_secret=None) -> FastAPI:
     sf = session_factory or _default_factory()
     with sf() as s:
         if s.query(Account).first() is None:
@@ -180,15 +188,41 @@ def create_app(session_factory=None, *, telegram_sender=None, telegram_allowed_i
     segredo = telegram_secret if telegram_secret is not None else os.environ.get("TELEGRAM_WEBHOOK_SECRET")
     bot = Bot(sf, telegram_allowed_ids if telegram_allowed_ids is not None else _env_ids())
 
+    def _responder(replies, send, canal):
+        for r in replies:
+            try:
+                send(r.chat_id, r.text)
+            except Exception:  # resposta perdida é melhor que 500: o canal reenviaria a entrega em loop
+                logging.getLogger(f"salim.{canal}").exception("falha ao enviar resposta")
+
     @app.post("/telegram/webhook")
     async def telegram_webhook(request: Request):
         if segredo and request.headers.get("X-Telegram-Bot-Api-Secret-Token") != segredo:
             raise HTTPException(403, "segredo inválido")
-        for r in bot.handle(await request.json()):
-            try:
-                sender(r.chat_id, r.text)
-            except Exception:  # resposta perdida é melhor que 500: o Telegram reenviaria o update em loop
-                logging.getLogger("salim.telegram").exception("falha ao enviar resposta")
+        _responder(bot.handle(await request.json()), sender, "telegram")
+        return {"ok": True}
+
+    wa_token, wa_phone = os.environ.get("WHATSAPP_TOKEN"), os.environ.get("WHATSAPP_PHONE_ID")
+    wa_send = whatsapp_sender or (WhatsAppSender(wa_token, wa_phone) if wa_token and wa_phone else (lambda to, texto: None))
+    wa_verify = whatsapp_verify_token if whatsapp_verify_token is not None else os.environ.get("WHATSAPP_VERIFY_TOKEN")
+    wa_secret = whatsapp_app_secret if whatsapp_app_secret is not None else os.environ.get("WHATSAPP_APP_SECRET")
+    wa_bot = Bot(sf, whatsapp_allowed if whatsapp_allowed is not None else _env_numbers(), channel=WhatsAppChannel())
+
+    @app.get("/whatsapp/webhook")
+    def whatsapp_verify(request: Request):
+        q = request.query_params
+        if wa_verify and q.get("hub.mode") == "subscribe" and q.get("hub.verify_token") == wa_verify:
+            return PlainTextResponse(q.get("hub.challenge", ""))
+        raise HTTPException(403, "verificação recusada")
+
+    @app.post("/whatsapp/webhook")
+    async def whatsapp_webhook(request: Request):
+        corpo = await request.body()
+        esperado = "sha256=" + hmac.new((wa_secret or "").encode(), corpo, hashlib.sha256).hexdigest()
+        # sem segredo configurado, nada é aceito: assinatura é a única prova de origem
+        if not wa_secret or not hmac.compare_digest(request.headers.get("X-Hub-Signature-256", ""), esperado):
+            raise HTTPException(403, "assinatura inválida")
+        _responder(wa_bot.handle(await request.json()), wa_send, "whatsapp")
         return {"ok": True}
 
     def get_session():
