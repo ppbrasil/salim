@@ -2,17 +2,19 @@ import hashlib
 import hmac
 import logging
 import os
+from urllib.parse import quote
 from datetime import date
 from pathlib import Path
 
 from contextlib import contextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from salim.money import brl, parse_brl
+from salim.auth import AuthConfig, LoginLimiter, make_session, read_session, verify_password
 from salim.channels import WhatsAppChannel, WhatsAppSender
 from salim.telegram import Bot, HttpSender
 from salim import bankimport as imp, budget as bud, ledger, obligations as obl, reports
@@ -172,9 +174,18 @@ def _env_numbers() -> set[str]:
     return {x.strip() for x in os.environ.get("WHATSAPP_ALLOWED_NUMBERS", "").split(",") if x.strip()}
 
 
-def create_app(session_factory=None, *, telegram_sender=None, telegram_allowed_ids=None, telegram_secret=None,
+_UNSET = object()
+OPEN_PATHS = ({"/health", "/login", "/telegram/webhook", "/whatsapp/webhook"})
+
+
+def _safe_next(n: str | None) -> str:
+    return n if n and n.startswith("/") and not n.startswith("//") and "\\" not in n else "/"
+
+
+def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, telegram_allowed_ids=None, telegram_secret=None,
                whatsapp_sender=None, whatsapp_allowed=None, whatsapp_verify_token=None,
                whatsapp_app_secret=None) -> FastAPI:
+    cfg = AuthConfig.from_env() if auth is _UNSET else auth      # falha fechada: sem senha o app não sobe
     sf = session_factory or _default_factory()
     with sf() as s:
         if s.query(Account).first() is None:
@@ -183,9 +194,57 @@ def create_app(session_factory=None, *, telegram_sender=None, telegram_allowed_i
     app = FastAPI(title="Salim")
     app.state.sf = sf
 
+    limiter = LoginLimiter()
+
+    @app.middleware("http")
+    async def exigir_login(request: Request, call_next):
+        if cfg is None:
+            return await call_next(request)
+        usuario = read_session(cfg, request.cookies.get("salim_session", ""))
+        if usuario is None and cfg.api_token:
+            h = request.headers.get("Authorization", "")
+            if h.startswith("Bearer ") and hmac.compare_digest(h[7:], cfg.api_token):
+                usuario = "api"
+        request.state.user = usuario
+        if usuario is None and request.url.path not in OPEN_PATHS:
+            if request.url.path == "/" or request.url.path.startswith("/ui"):
+                return RedirectResponse(f"/login?next={quote(request.url.path)}", status_code=303)
+            return JSONResponse({"detail": "não autenticado"}, status_code=401)
+        return await call_next(request)
+
+    @app.get("/login")
+    def login_page(request: Request, next: str = "/"):
+        return templates.TemplateResponse(request, "login.html", {"next": _safe_next(next), "erro": None})
+
+    @app.post("/login")
+    async def login(request: Request):
+        form = dict((await request.form()).items())
+        destino = _safe_next(form.get("next"))
+        if limiter.locked():
+            return templates.TemplateResponse(request, "login.html", {
+                "next": destino, "erro": "Muitas tentativas. Aguarde alguns minutos."}, status_code=429)
+        ok_senha = verify_password(form.get("password", ""), cfg.password_hash)      # sempre roda: tempo constante
+        if not (ok_senha and hmac.compare_digest(form.get("username", ""), cfg.username)):
+            limiter.failure()
+            return templates.TemplateResponse(request, "login.html", {
+                "next": destino, "erro": "Usuário ou senha inválidos."}, status_code=401)
+        limiter.success()
+        r = RedirectResponse(destino, status_code=303)
+        r.set_cookie("salim_session", make_session(cfg), max_age=cfg.session_days * 86400, httponly=True,
+                     samesite="lax", secure=cfg.cookie_secure)
+        return r
+
+    @app.post("/logout")
+    def logout():
+        r = RedirectResponse("/login", status_code=303)
+        r.delete_cookie("salim_session")
+        return r
+
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     sender = telegram_sender or (HttpSender(token) if token else (lambda chat, texto: None))
     segredo = telegram_secret if telegram_secret is not None else os.environ.get("TELEGRAM_WEBHOOK_SECRET")
+    if token and not segredo:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN definido sem TELEGRAM_WEBHOOK_SECRET: o webhook ficaria aberto")
     bot = Bot(sf, telegram_allowed_ids if telegram_allowed_ids is not None else _env_ids())
 
     def _responder(replies, send, canal):

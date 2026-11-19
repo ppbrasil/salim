@@ -1,8 +1,13 @@
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
 from salim.app import create_app
 from salim.db import make_session_factory
+
+# A suíte roda sem login; os testes de autenticação passam `auth=` explicitamente.
+os.environ.setdefault("SALIM_AUTH_DISABLED", "1")
 
 
 @pytest.fixture

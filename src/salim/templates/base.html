@@ -21,14 +21,15 @@
 </style>
 </head>
 <body>
-<nav>
+{% block nav %}<nav>
   <a href="/ui/accounts">Plano de contas</a>
   <a href="/ui/transactions/new">Novo lançamento</a>
   <a href="/ui/payables">A pagar</a>
   <a href="/ui/reports/dre">DRE</a>
   <a href="/ui/reports/cash">Caixa</a>
   <a href="/ui/budget">Orçamento</a>
-</nav>
+  {% if request.state.user %}<form method="post" action="/logout" style="margin-left:auto"><button>Sair</button></form>{% endif %}
+</nav>{% endblock %}
 <main>{% block content %}{% endblock %}</main>
 </body>
 </html>
