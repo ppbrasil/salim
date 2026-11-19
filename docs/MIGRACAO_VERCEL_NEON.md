@@ -55,14 +55,15 @@ Este documento mapeia, no código real, o que precisa mudar. Regra de trabalho m
 
 ## 3. Rodar local antes de publicar
 
-`docker compose up` sobe **app + Postgres 17** (mesma versão major do Neon). Os 246 testes rodam contra o Postgres local (`SALIM_TEST_DB_URL`): o banco é criado uma vez e cada teste limpa as tabelas com `TRUNCATE ... RESTART IDENTITY CASCADE` (TRUNCATE não dispara os triggers de imutabilidade). Durante a migração a suíte roda nos **dois** bancos; no corte, SQLite sai.
+`docker compose --profile pg up -d db` sobe o **Postgres 17** (versão major atual do Neon, a confirmar no painel). Neste ambiente de desenvolvimento sem Docker o teste local usa o Postgres 16 do sistema; a CI usa a 17. Os 246 testes rodam contra o Postgres (`SALIM_TEST_DB_URL`): o banco é criado uma vez e cada teste limpa as tabelas com `TRUNCATE ... RESTART IDENTITY CASCADE` (TRUNCATE não dispara os triggers de imutabilidade). Durante a migração a suíte roda nos **dois** bancos; no corte, SQLite sai.
 
 ## 4. Stories (cada uma toca no máximo 1–2 arquivos de produção; teste primeiro)
 
 | # | Story | Entrega verificável |
 |---|---|---|
-| M0 | Postgres local no compose + `conftest` parametrizado por `SALIM_TEST_DB_URL` | suíte roda no PG e **falha de propósito** (lista vermelha inicial = checklist) |
-| M1 | `schema_pg.sql`: tipos reais, identity, triggers plpgsql, views corrigidas | testes de schema/imutabilidade/integridade verdes no PG |
+| M0 ✅ | Postgres de teste: serviço `db` (17) no compose, serviço na CI, driver `psycopg`, teste de conexão com trava `*_test` | 3 testes verdes no PG local (16) e na CI (17); sem a variável, são pulados |
+| M1 | `schema_pg.sql` + `db.py` com caminho PG + `conftest` parametrizado por `SALIM_TEST_DB_URL` (TRUNCATE entre testes) | schema carrega no PG; a suíte inteira roda no PG e a **lista vermelha vira o checklist da M2–M6** |
+| M1b | Triggers plpgsql, views corrigidas, tipos reais | testes de schema/imutabilidade/integridade verdes no PG |
 | M2 | Casts e SQL cru em `reports.py` e `nlentry.py` (SUM→BIGINT, GROUP BY, datas) | testes de DRE, caixa, orçamento verdes no PG |
 | M3 | `salim.migrate` + `schema_migrations` + seed fora da partida | `create_app` não escreve no banco; migrate idempotente |
 | M4 | Estado do bot em tabelas (`bot_pending`, `bot_seen`) | testes do Telegram/WhatsApp verdes, reinício do processo não perde proposta |

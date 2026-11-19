@@ -22,6 +22,26 @@ services:
       - salim-data:/data
     restart: unless-stopped
 
+  # Desenvolvimento da migração para Postgres (mesma major do Neon):
+  #   docker compose --profile pg up -d db
+  #   SALIM_TEST_DB_URL=postgresql+psycopg://salim:salim@127.0.0.1:5432/salim_test python -m pytest
+  db:
+    image: postgres:17
+    profiles: ["pg"]
+    environment:
+      POSTGRES_USER: salim
+      POSTGRES_PASSWORD: salim
+      POSTGRES_DB: salim
+    ports: ["127.0.0.1:5432:5432"]
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U salim -d salim"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   caddy:
     image: caddy:2
     profiles: ["https"]
@@ -36,3 +56,4 @@ services:
 volumes:
   salim-data:
   caddy-data:
+  pg-data:

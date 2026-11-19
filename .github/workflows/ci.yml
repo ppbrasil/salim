@@ -3,6 +3,19 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: salim
+          POSTGRES_PASSWORD: salim
+          POSTGRES_DB: salim_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U salim -d salim_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      SALIM_TEST_DB_URL: postgresql+psycopg://salim:salim@127.0.0.1:5432/salim_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

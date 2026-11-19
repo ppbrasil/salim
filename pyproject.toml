@@ -5,7 +5,7 @@ requires-python = ">=3.12"
 dependencies = ["fastapi", "sqlalchemy>=2", "jinja2", "mcp", "uvicorn", "python-multipart"]
 
 [project.optional-dependencies]
-dev = ["pytest", "httpx"]
+dev = ["pytest", "httpx", "psycopg[binary]"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
