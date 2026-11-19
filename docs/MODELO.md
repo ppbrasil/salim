@@ -138,3 +138,7 @@ flowchart LR
 2. **Competência é mês**, para confrontar com o orçamento mensal.
 3. **Juros e multa** em contas (linhas) separadas: `5.07.01 Juros` e `5.07.02 Multas`.
 4. **Fluxo de caixa** mostra o pagamento do título. Abrir por categoria é detalhe proporcional, fora da v1.
+
+
+## Fila de importação (E8)
+`import_items`: item de extrato (CSV ou conector) que ainda não virou lançamento. `external_id` único impede reimportar; `status` pending → matched (casou com lançamento existente) | booked (virou lançamento) | ignored. Não faz parte do razão: só vira partida dobrada quando alguém trata o item.

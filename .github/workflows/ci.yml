@@ -7,6 +7,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.13" }
-      - run: pip install fastapi "sqlalchemy>=2" jinja2 httpx mcp pytest python-multipart
+      - run: pip install -e ".[dev]"
       - run: python -m pytest -q -W error
       - run: docker build -t salim .

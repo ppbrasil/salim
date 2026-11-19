@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir fastapi "sqlalchemy>=2" jinja2 httpx mcp uvicorn python-multipart
+RUN pip install --no-cache-dir fastapi "sqlalchemy>=2" jinja2 mcp uvicorn python-multipart
 COPY src ./src
 ENV PYTHONPATH=/app/src
 

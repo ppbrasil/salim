@@ -27,7 +27,7 @@ Decisões: gestão por **competência (mês)**; compra parcelada entra inteira n
 | 2.5 | Tela de novo lançamento | Posta e redireciona; erro aparece na tela | B app.py, F transaction_form.html |
 | 2.6 | Tela de extrato | Lista com competência | B app.py, F statement.html |
 
-## E3 Títulos (fatura, parcela, boleto, dívida, reembolso)
+## E3 Títulos (fatura, parcela, boleto, dívida, reembolso) ✅
 | ID | História | Teste de aceite | Arquivos |
 |----|----------|-----------------|----------|
 | 3.1 | Criar título | Persiste com vencimento; saldo 0 | B obligations.py |
@@ -43,7 +43,7 @@ Decisões: gestão por **competência (mês)**; compra parcelada entra inteira n
 | 3.11 | API: títulos e aging | `GET /obligations?status=atrasada` | B app.py |
 | 3.12 | Tela "a pagar" | Por vencimento, com atraso destacado | B app.py, F payables.html |
 
-## E4 DRE, caixa e orçamento
+## E4 DRE, caixa e orçamento ✅
 | ID | História | Teste de aceite | Arquivos |
 |----|----------|-----------------|----------|
 | 4.1 | DRE por competência | Inclui não pago; juros e multa em linhas próprias | B reports.py |
@@ -54,20 +54,23 @@ Decisões: gestão por **competência (mês)**; compra parcelada entra inteira n
 | 4.6 | Perfil pontual × diluído e alerta | Aluguel no dia 5 sem alerta; mercado acima do esperado alerta | B budget.py |
 | 4.7 | Telas: DRE, caixa, orçamento | HTML com números | B app.py, F reports.html |
 
-## E5 Consulta e MCP
+## E5 Consulta e MCP ✅
 5.1 camada de consulta única (`queries.py`) · 5.2 servidor MCP `get_balance` · 5.3 `get_statement` · 5.4 `get_budget_status` · 5.5 `get_upcoming_payables` · 5.6 `propose_transaction` (não grava) · 5.7 `confirm_transaction`
 
-## E6 Telegram
+## E6 Telegram ✅
 6.1 webhook + `/saldo` · 6.2 só IDs autorizados · 6.3 `/orcamento` e `/faturas` · 6.4 lançamento com confirmação · 6.5 idempotência por `external_ref`
 
-## E7 Lançamento por texto
+## E7 Lançamento por texto ✅
 7.1 texto livre → proposta (regras determinísticas, plugável para LLM) · 7.2 sugestão de conta pelo histórico
 
-## E8 Importação
+## E8 Importação ✅ (API; sem tela)
 8.1 CSV de extrato → fila · 8.2 casar com lançamento existente · 8.3 criar lançamento do item · 8.4 contrato do conector Open Finance
 
-## E9 Canal comum e WhatsApp
+## E9 Canal comum e WhatsApp ✅ (adaptador testado com payloads simulados)
 9.1 interface de canal · 9.2 adaptador WhatsApp com os mesmos testes do Telegram
+
+## Situação (19/11/2026)
+E0–E9 implementados, 223 testes verdes com `-W error`. Falta antes de uso com dinheiro real: versionamento de schema (Alembic), `docker build` rodado fora deste ambiente, WhatsApp/Telegram testados contra as APIs reais, tela de importação, MCP por HTTP (hoje só stdio).
 
 ## Riscos conhecidos
 - Migrações: schema nasce do `schema.sql`; antes de dados reais entra Alembic ou versionamento de schema.
