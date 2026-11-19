@@ -85,6 +85,19 @@ class BudgetLine(Base):
     day_of_month: Mapped[int | None] = mapped_column(nullable=True)
 
 
+class ImportItem(Base):
+    __tablename__ = "import_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"))
+    external_id: Mapped[str] = mapped_column(String, unique=True)
+    item_date: Mapped[date] = mapped_column(Date)
+    amount_cents: Mapped[int]
+    description: Mapped[str]
+    status: Mapped[str] = mapped_column(String, default="pending")
+    transaction_id: Mapped[int | None] = mapped_column(ForeignKey("transactions.id"), nullable=True)
+
+
 class ImmutableError(Exception):
     """Lançamentos e partidas nunca são alterados nem apagados; use estorno."""
 

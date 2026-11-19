@@ -73,6 +73,18 @@ CREATE TABLE budget_lines (
 );
 CREATE UNIQUE INDEX ux_budget ON budget_lines(account_id, COALESCE(month, 'default'));
 
+-- 6. FILA DE IMPORTAÇÃO (extratos CSV e conectores; vira lançamento só depois de tratada) -----
+CREATE TABLE import_items (
+  id             INTEGER PRIMARY KEY,
+  account_id     INTEGER NOT NULL REFERENCES accounts(id),
+  external_id    TEXT NOT NULL UNIQUE,                 -- impede reimportar o mesmo item
+  item_date      TEXT NOT NULL,
+  amount_cents   INTEGER NOT NULL CHECK (amount_cents <> 0),   -- entrada > 0, saída < 0
+  description    TEXT NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','matched','booked','ignored')),
+  transaction_id INTEGER REFERENCES transactions(id)
+);
+
 -- INTEGRIDADE NO BANCO ---------------------------------------------------------
 CREATE TRIGGER trg_posting_rules BEFORE INSERT ON postings
 BEGIN

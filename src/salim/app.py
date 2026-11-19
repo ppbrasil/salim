@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from salim.money import brl, parse_brl
 from salim.telegram import Bot, HttpSender
-from salim import budget as bud, ledger, obligations as obl, reports
+from salim import bankimport as imp, budget as bud, ledger, obligations as obl, reports
 from salim.chart import seed_chart
 from salim.db import make_session_factory
 from salim.models import Account, AccountType
@@ -127,7 +127,7 @@ def business_errors():
         raise HTTPException(409, f"conta já existe: {e}")
     except ledger.AccountNotFoundError as e:
         raise HTTPException(422, f"conta inexistente: {e}")
-    except (ledger.InvalidAccountError, ledger.InvalidTransactionError, obl.ObligationError, bud.BudgetError) as e:
+    except (ledger.InvalidAccountError, ledger.InvalidTransactionError, obl.ObligationError, bud.BudgetError, imp.ImportError_) as e:
         raise HTTPException(422, str(e))
 
 
@@ -137,6 +137,15 @@ class BudgetIn(BaseModel):
     month: date | None = None
     profile: str = "spread"
     day_of_month: int | None = None
+
+
+class ImportCsvIn(BaseModel):
+    account_code: str
+    csv_text: str
+
+
+class BookIn(BaseModel):
+    counter_account: str
 
 
 class TransactionIn(BaseModel):
@@ -285,6 +294,35 @@ def create_app(session_factory=None, *, telegram_sender=None, telegram_allowed_i
         with business_errors():
             o = obl.register_reimbursable_expense(session, **body.model_dump())
             return obl.get_obligation(session, o.id, date.today())
+
+    # ---------------------------------------------------------------- importação
+    def _item(i):
+        return {**vars(i), "date": i.date.isoformat()}
+
+    @app.post("/imports/csv", status_code=201)
+    def import_csv(body: ImportCsvIn, session=Depends(get_session)):
+        with business_errors():
+            r = imp.import_csv(session, body.account_code, body.csv_text)
+        return {"created": r.created, "skipped": r.skipped, "errors": [vars(e) for e in r.errors]}
+
+    @app.get("/imports")
+    def list_imports(status: str | None = None, session=Depends(get_session)):
+        return [_item(i) for i in imp.list_items(session, status)]
+
+    @app.post("/imports/match")
+    def match_imports(session=Depends(get_session)):
+        return {"matched": imp.match_items(session)}
+
+    @app.post("/imports/{item_id}/book", status_code=201)
+    def book_import(item_id: int, body: BookIn, session=Depends(get_session)):
+        with business_errors():
+            return {"transaction_id": imp.book_item(session, item_id, body.counter_account)}
+
+    @app.post("/imports/{item_id}/ignore")
+    def ignore_import(item_id: int, session=Depends(get_session)):
+        with business_errors():
+            imp.ignore_item(session, item_id)
+        return {"ok": True}
 
     # ---------------------------------------------------------------- relatórios e orçamento
     @app.get("/reports/dre")
