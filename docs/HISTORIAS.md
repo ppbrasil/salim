@@ -70,7 +70,7 @@ Decisões: gestão por **competência (mês)**; compra parcelada entra inteira n
 9.1 interface de canal · 9.2 adaptador WhatsApp com os mesmos testes do Telegram
 
 ## Situação (19/11/2026)
-E0–E9 implementados, 223 testes verdes com `-W error`. Falta antes de uso com dinheiro real: versionamento de schema (Alembic), `docker build` rodado fora deste ambiente, WhatsApp/Telegram testados contra as APIs reais, tela de importação, MCP por HTTP (hoje só stdio).
+E0–E9 implementados + camada de produção (login, backup diário, HTTPS via Caddy): 246 testes verdes com `-W error`. Falta antes de uso com dinheiro real: `docker build` rodado fora deste ambiente, restauração de backup testada no servidor, backup copiado para fora do servidor, versionamento de schema (Alembic), WhatsApp/Telegram testados contra as APIs reais, tela de importação, MCP por HTTP (hoje só stdio).
 
 ## Riscos conhecidos
 - Migrações: schema nasce do `schema.sql`; antes de dados reais entra Alembic ou versionamento de schema.
