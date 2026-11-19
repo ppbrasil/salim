@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from salim.app import create_app
 from salim.db import make_session_factory
+from salim.migrate import apply_migrations
 
 # A suíte roda sem login; os testes de autenticação passam `auth=` explicitamente.
 os.environ.setdefault("SALIM_AUTH_DISABLED", "1")
@@ -20,6 +21,7 @@ def new_factory():
     if not TEST_URL:
         return make_session_factory("sqlite://")
     factory = make_session_factory(TEST_URL)
+    apply_migrations(factory.kw["bind"])
     with factory.kw["bind"].begin() as c:
         nome = c.execute(text("select current_database()")).scalar_one()
         assert nome.endswith("_test"), f"recusando truncar o banco {nome!r}: a suíte só roda em bancos *_test"

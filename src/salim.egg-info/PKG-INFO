@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: salim
+Version: 0.1.0
+Requires-Python: >=3.12
+Requires-Dist: fastapi
+Requires-Dist: sqlalchemy>=2
+Requires-Dist: jinja2
+Requires-Dist: mcp
+Requires-Dist: uvicorn
+Requires-Dist: python-multipart
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: httpx; extra == "dev"
+Requires-Dist: psycopg[binary]; extra == "dev"

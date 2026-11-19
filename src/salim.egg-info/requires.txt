@@ -1,0 +1,11 @@
+fastapi
+sqlalchemy>=2
+jinja2
+mcp
+uvicorn
+python-multipart
+
+[dev]
+pytest
+httpx
+psycopg[binary]

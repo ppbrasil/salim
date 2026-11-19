@@ -184,12 +184,13 @@ def _safe_next(n: str | None) -> str:
 
 def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, telegram_allowed_ids=None, telegram_secret=None,
                whatsapp_sender=None, whatsapp_allowed=None, whatsapp_verify_token=None,
-               whatsapp_app_secret=None) -> FastAPI:
+               whatsapp_app_secret=None, seed: bool = True) -> FastAPI:
     cfg = AuthConfig.from_env() if auth is _UNSET else auth      # falha fechada: sem senha o app não sobe
     sf = session_factory or _default_factory()
-    with sf() as s:
-        if s.query(Account).first() is None:
-            seed_chart(s)
+    if seed:        # no deploy serverless o plano padrão vem de `python -m salim.migrate --seed`, não da partida
+        with sf() as s:
+            if s.query(Account).first() is None:
+                seed_chart(s)
 
     app = FastAPI(title="Salim")
     app.state.sf = sf
