@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from salim.db import sum_cents
 from salim.models import Account, AccountType, ImmutableError, Obligation, Posting, Transaction  # noqa: F401
 
 
@@ -66,7 +67,7 @@ def create_account(
         session.commit()
     except IntegrityError as e:
         session.rollback()
-        if "UNIQUE" in str(e.orig):
+        if "UNIQUE" in str(e.orig).upper():   # SQLite: "UNIQUE constraint failed"; Postgres: "duplicate key ... unique constraint"
             raise DuplicateAccountError(code)
         raise InvalidAccountError(str(e.orig))
     return conta
@@ -186,7 +187,7 @@ def balance(session: Session, code: str, until: date | None = None) -> int:
     """Saldo natural (positivo = no sentido normal da conta), pela data do evento."""
     conta = get_account(session, code)
     q = (
-        select(func.coalesce(func.sum(Posting.amount_cents), 0))
+        select(sum_cents(Posting.amount_cents))
         .join(Transaction, Transaction.id == Posting.transaction_id)
         .where(Posting.account_id.in_(_subtree_ids(session, conta)))
     )
@@ -213,13 +214,13 @@ def reverse_transaction(session: Session, tx_id: int, *, event_date: date) -> Tr
 
 def trial_balance(session: Session) -> int:
     """Soma bruta de todas as partidas do livro. Invariante: sempre 0."""
-    return session.execute(select(func.coalesce(func.sum(Posting.amount_cents), 0))).scalar_one()
+    return session.execute(select(sum_cents(Posting.amount_cents))).scalar_one()
 
 
 def balances_all(session: Session) -> dict[int, int]:
     """Saldo natural de todas as contas; grupos somam a subárvore. Uma consulta + soma em memória."""
     proprio = dict(session.execute(
-        select(Posting.account_id, func.sum(Posting.amount_cents)).group_by(Posting.account_id)).all())
+        select(Posting.account_id, sum_cents(Posting.amount_cents)).group_by(Posting.account_id)).all())
     contas = session.execute(select(Account)).scalars().all()
     filhos: dict[int | None, list[Account]] = {}
     for c in contas:

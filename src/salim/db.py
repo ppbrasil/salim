@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import BigInteger, cast, create_engine, event, func, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -10,6 +10,11 @@ SCHEMA_PG = (Path(__file__).parent / "schema_pg.sql").read_text()
 
 class Base(DeclarativeBase):
     pass
+
+
+def sum_cents(col):
+    """SUM de centavos como inteiro. No Postgres SUM(BIGINT) é numeric (Decimal); o CAST mantém int nos dois bancos."""
+    return cast(func.coalesce(func.sum(col), 0), BigInteger)
 
 
 def _prepare_sqlite(engine) -> None:

@@ -21,9 +21,8 @@ jobs:
       - run: pip install -e ".[dev]"
       - name: Suíte em SQLite (bloqueante)
         run: python -m pytest -q -W error
-      # Migração para Postgres (docs/MIGRACAO_VERCEL_NEON.md): informativo até a M5; vira bloqueante e troca o SQLite no corte (M10).
-      - name: Suíte em Postgres 17 (informativa)
-        continue-on-error: true
+      # Migração para Postgres (docs/MIGRACAO_VERCEL_NEON.md): os dois bancos bloqueiam até o corte (M10), quando o SQLite sai.
+      - name: Suíte em Postgres 17 (bloqueante)
         env:
           SALIM_TEST_DB_URL: postgresql+psycopg://salim:salim@127.0.0.1:5432/salim_test
         run: python -m pytest -q -W error

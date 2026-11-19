@@ -63,7 +63,7 @@ Este documento mapeia, no código real, o que precisa mudar. Regra de trabalho m
 |---|---|---|
 | M0 ✅ | Postgres de teste: serviço `db` (17) no compose, serviço na CI, driver `psycopg`, teste de conexão com trava `*_test` | 3 testes verdes no PG local (16) e na CI (17); sem a variável, são pulados |
 | M1 ✅ | `schema_pg.sql` (tipos reais, identity, triggers plpgsql, views corrigidas) + `db.py` com caminho PG + `conftest` parametrizado por `SALIM_TEST_DB_URL` (TRUNCATE entre testes) | schema carrega no PG; imutabilidade e integridade já passam; suíte no PG: **197 verdes, 52 vermelhas** (lista abaixo) |
-| M2 | Casts e SQL cru em `reports.py` e `nlentry.py` (SUM→BIGINT, GROUP BY, datas) | testes de DRE, caixa, orçamento verdes no PG |
+| M2 ✅ | Casts e SQL cru em `reports.py` e `nlentry.py` (SUM→BIGINT, GROUP BY, datas) | testes de DRE, caixa, orçamento verdes no PG (249 verdes) |
 | M3 | `salim.migrate` + `schema_migrations` + seed fora da partida | `create_app` não escreve no banco; migrate idempotente |
 | M4 | Estado do bot em tabelas (`bot_pending`, `bot_seen`) | testes do Telegram/WhatsApp verdes, reinício do processo não perde proposta |
 | M5 | `LoginLimiter` em tabela | trava persiste entre instâncias (teste com duas instâncias) |
@@ -73,7 +73,7 @@ Este documento mapeia, no código real, o que precisa mudar. Regra de trabalho m
 | M9 | Workflow de backup (`pg_dump` + criptografia + envio) + script de restauração | restauração feita em um Postgres limpo, conferindo o somatório do razão |
 | M10 | Corte: remover ramo SQLite, `backup.py` antigo, Caddy; docs e README | suíte só em PG; compose vira "dev local" |
 
-## 4b. Lista vermelha da M1 (suíte no Postgres: 197 verdes, 52 falhas)
+## 4b. Lista vermelha da M1 (suíte no Postgres: 197 verdes, 52 falhas) — ✅ zerada na M2 (249 verdes)
 
 | Causa | Falhas | Onde | Story |
 |---|---|---|---|

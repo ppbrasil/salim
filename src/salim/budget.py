@@ -6,6 +6,7 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from salim.db import sum_cents
 from salim.ledger import _subtree_ids, month_start
 from salim.models import Account, AccountType, BudgetLine, Posting
 
@@ -92,7 +93,7 @@ def _expected(linha: BudgetLine, month: date, today: date) -> int:
 
 def _actual(session: Session, conta: Account, month: date) -> int:
     bruto = session.execute(
-        select(func.coalesce(func.sum(Posting.amount_cents), 0))
+        select(sum_cents(Posting.amount_cents))
         .where(Posting.account_id.in_(_subtree_ids(session, conta)), Posting.competence_month == month)
     ).scalar_one()
     return bruto if conta.type == AccountType.EXPENSE else -bruto

@@ -9,6 +9,7 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from salim.db import sum_cents
 from salim.ledger import DEBIT_NATURE, Entry, get_account, new_transaction, post_into
 from salim.models import Account, Obligation, Posting, Transaction
 
@@ -73,10 +74,10 @@ def _status(kind: str, closing: date | None, due: date, balance: int, today: dat
 
 def _views(session: Session, today: date, where=None) -> list[ObligationView]:
     q = (
-        select(Obligation, Account, func.coalesce(func.sum(Posting.amount_cents), 0))
+        select(Obligation, Account, sum_cents(Posting.amount_cents))
         .join(Account, Account.id == Obligation.account_id)
         .outerjoin(Posting, Posting.obligation_id == Obligation.id)
-        .group_by(Obligation.id)
+        .group_by(Obligation.id, Account.id)
         .order_by(Obligation.due_date, Obligation.id)
     )
     if where is not None:
