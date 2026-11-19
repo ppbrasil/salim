@@ -7,6 +7,8 @@ import secrets
 import time
 from dataclasses import dataclass
 
+from sqlalchemy import text
+
 _N, _R, _P = 16384, 8, 1
 
 
@@ -85,22 +87,36 @@ def read_session(cfg: AuthConfig, cookie: str, now: float | None = None) -> str 
 
 
 class LoginLimiter:
-    """Trava global (usuário único): depois de N erros seguidos, recusa tentativas por um tempo."""
-    def __init__(self, max_failures: int = 5, lock_seconds: float = 900, clock=time.monotonic):
-        self.max, self.lock, self.clock = max_failures, lock_seconds, clock
-        self.count, self.until = 0, 0.0
+    """Trava global (usuário único): depois de N erros seguidos, recusa tentativas por um tempo.
+    O estado fica no banco (tabela login_throttle), então vale entre processos e reinícios."""
+    KEY = "global"
+
+    def __init__(self, session_factory, max_failures: int = 5, lock_seconds: float = 900, clock=time.time):
+        self.sf, self.max, self.lock, self.clock = session_factory, max_failures, lock_seconds, clock
 
     def locked(self) -> bool:
-        if self.clock() < self.until:
-            return True
-        if self.until:
-            self.count, self.until = 0, 0.0
-        return False
+        with self.sf() as s:
+            row = s.execute(text("select locked_until from login_throttle where key = :k"), {"k": self.KEY}).first()
+            if row is None or row[0] == 0:
+                return False
+            if self.clock() < row[0]:
+                return True
+            s.execute(text("update login_throttle set failures = 0, locked_until = 0 where key = :k"), {"k": self.KEY})
+            s.commit()
+            return False
 
     def failure(self) -> None:
-        self.count += 1
-        if self.count >= self.max:
-            self.until = self.clock() + self.lock
+        with self.sf() as s:
+            n = s.execute(text("""
+                INSERT INTO login_throttle (key, failures, locked_until) VALUES (:k, 1, 0)
+                ON CONFLICT (key) DO UPDATE SET failures = login_throttle.failures + 1
+                RETURNING failures"""), {"k": self.KEY}).scalar_one()
+            if n >= self.max:
+                s.execute(text("update login_throttle set locked_until = :u where key = :k"),
+                          {"u": self.clock() + self.lock, "k": self.KEY})
+            s.commit()
 
     def success(self) -> None:
-        self.count, self.until = 0, 0.0
+        with self.sf() as s:
+            s.execute(text("update login_throttle set failures = 0, locked_until = 0 where key = :k"), {"k": self.KEY})
+            s.commit()

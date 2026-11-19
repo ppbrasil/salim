@@ -102,6 +102,13 @@ CREATE TABLE bot_seen (
   UNIQUE (channel, msg_id)
 );
 
+-- 8. TRAVA DE LOGIN (uma linha global; só contagem e prazo) -----------------------------
+CREATE TABLE login_throttle (
+  key          TEXT PRIMARY KEY,
+  failures     INTEGER NOT NULL DEFAULT 0,
+  locked_until REAL NOT NULL DEFAULT 0
+);
+
 -- INTEGRIDADE NO BANCO ---------------------------------------------------------
 CREATE TRIGGER trg_posting_rules BEFORE INSERT ON postings
 BEGIN

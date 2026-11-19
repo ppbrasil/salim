@@ -36,7 +36,8 @@ def test_sessao_assinada_expira_e_nao_aceita_adulteracao():
 
 def test_limitador_trava_apos_falhas_e_destrava_com_o_tempo():
     t = [0.0]
-    lim = LoginLimiter(max_failures=3, lock_seconds=900, clock=lambda: t[0])
+    factory = new_factory()
+    lim = LoginLimiter(factory, max_failures=3, lock_seconds=900, clock=lambda: t[0])
     for _ in range(3):
         assert not lim.locked()
         lim.failure()
@@ -45,6 +46,7 @@ def test_limitador_trava_apos_falhas_e_destrava_com_o_tempo():
     assert not lim.locked()
     lim.failure(); lim.success()
     assert not lim.locked()
+    factory.kw["bind"].dispose()
 
 
 def test_config_pelo_ambiente_e_validacoes(monkeypatch):

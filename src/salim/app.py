@@ -195,7 +195,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
     app = FastAPI(title="Salim")
     app.state.sf = sf
 
-    limiter = LoginLimiter()
+    limiter = LoginLimiter(sf)
 
     @app.middleware("http")
     async def exigir_login(request: Request, call_next):
