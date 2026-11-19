@@ -10,7 +10,7 @@ def test_cria_e_busca_conta_por_codigo(session):
     assert conta.name == "Conta Corrente"
     assert conta.type == AccountType.ASSET
     assert conta.is_group is False
-    assert conta.kind == "normal"
+    assert not conta.is_cash and not conta.tracks_obligations
 
 
 def test_codigo_duplicado_falha(session):

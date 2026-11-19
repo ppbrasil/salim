@@ -13,7 +13,7 @@ def _lanca(session):
     seed_chart(session)
     return post_transaction(
         session, event_date=date(2026, 11, 5), description="Aluguel",
-        entries=[Entry("5.01.01", 300000, competence_date=date(2026, 11, 1)), Entry("1.01.01", -300000)],
+        entries=[Entry("5.01.01", 300000, competence=date(2026, 10, 15)), Entry("1.01.01", -300000)],
     )
 
 
@@ -32,7 +32,7 @@ def test_estorno_preserva_competencia_da_partida(session):
     tx = _lanca(session)
     est = reverse_transaction(session, tx.id, event_date=date(2026, 11, 6))
     rows = session.query(Posting).filter_by(transaction_id=est.id).all()
-    assert sorted(p.competence_date for p in rows) == [date(2026, 11, 1), date(2026, 11, 5)]  # espelha o original
+    assert sorted(p.competence_month for p in rows) == [date(2026, 10, 1), date(2026, 11, 1)]  # espelha o original
 
 
 def test_nao_estorna_duas_vezes(session):

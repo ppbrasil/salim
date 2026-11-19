@@ -9,7 +9,7 @@ from salim.models import Account
 def test_balancete_zera_com_lancamentos_aleatorios(session):
     seed_chart(session)
     rng = random.Random(42)
-    folhas = [a.code for a in session.query(Account).filter_by(is_group=False).all()]
+    folhas = [a.code for a in session.query(Account).filter_by(is_group=False, tracks_obligations=False).all()]
     ids = []
     for i in range(200):
         n = rng.randint(2, 4)

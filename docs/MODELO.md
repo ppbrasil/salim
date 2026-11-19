@@ -1,6 +1,6 @@
 # Salim — Modelo de dados (proposta v2)
 
-DDL completo e testado: `docs/modelo.sql`. Protótipos: `spike/test_cenario_critico.py` e `spike/test_mais_cenarios.py` (15 testes verdes).
+DDL completo e testado: `src/salim/schema.sql`. Protótipos: `spike/test_cenario_critico.py` e `spike/test_mais_cenarios.py` (15 testes verdes).
 
 ## 1. Ideia central
 

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-DDL = (Path(__file__).parent.parent / "docs" / "modelo.sql").read_text()
+DDL = (Path(__file__).parent.parent / "src" / "salim" / "schema.sql").read_text()
 
 
 class Book:
