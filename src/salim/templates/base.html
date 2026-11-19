@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Salim{% endblock %}</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 0; color: #1f2328; background: #fafafa; }
+  nav { background: #1f2328; padding: .6rem 1.2rem; display: flex; gap: 1.2rem; }
+  nav a { color: #fff; text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  main { max-width: 980px; margin: 1.5rem auto; padding: 0 1rem; }
+  table { border-collapse: collapse; width: 100%; background: #fff; }
+  th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #e5e5e5; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .group td { font-weight: 600; background: #f3f3f3; }
+  .neg { color: #b42318; } .erro { background: #fee4e2; color: #7a271a; padding: .6rem .8rem; border-radius: 6px; }
+  .atrasada { color: #b42318; font-weight: 600; } .quitada { color: #067647; }
+  input, select, button { font: inherit; padding: .3rem .5rem; } input.val { width: 8rem; text-align: right; }
+  .muted { color: #667085; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/ui/accounts">Plano de contas</a>
+  <a href="/ui/transactions/new">Novo lançamento</a>
+  <a href="/ui/payables">A pagar</a>
+  <a href="/ui/reports/dre">DRE</a>
+  <a href="/ui/reports/cash">Caixa</a>
+  <a href="/ui/budget">Orçamento</a>
+</nav>
+<main>{% block content %}{% endblock %}</main>
+</body>
+</html>

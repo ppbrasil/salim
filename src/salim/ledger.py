@@ -186,3 +186,48 @@ def reverse_transaction(session: Session, tx_id: int, *, event_date: date) -> Tr
 def trial_balance(session: Session) -> int:
     """Soma bruta de todas as partidas do livro. Invariante: sempre 0."""
     return session.execute(select(func.coalesce(func.sum(Posting.amount_cents), 0))).scalar_one()
+
+
+def balances_all(session: Session) -> dict[int, int]:
+    """Saldo natural de todas as contas; grupos somam a subárvore. Uma consulta + soma em memória."""
+    proprio = dict(session.execute(
+        select(Posting.account_id, func.sum(Posting.amount_cents)).group_by(Posting.account_id)).all())
+    contas = session.execute(select(Account)).scalars().all()
+    filhos: dict[int | None, list[Account]] = {}
+    for c in contas:
+        filhos.setdefault(c.parent_id, []).append(c)
+
+    saldos: dict[int, int] = {}
+
+    def bruto(c: Account) -> int:
+        total = proprio.get(c.id, 0) + sum(bruto(f) for f in filhos.get(c.id, []))
+        saldos[c.id] = total if c.type in DEBIT_NATURE else -total
+        return total
+
+    for raiz in filhos.get(None, []):
+        bruto(raiz)
+    return saldos
+
+
+def statement(session: Session, code: str) -> list[dict]:
+    """Extrato da conta (ou do grupo, somando a subárvore) com saldo natural corrente."""
+    conta = get_account(session, code)
+    ids = _subtree_ids(session, conta)
+    rows = session.execute(
+        select(Posting, Transaction, Account)
+        .join(Transaction, Transaction.id == Posting.transaction_id)
+        .join(Account, Account.id == Posting.account_id)
+        .where(Posting.account_id.in_(ids))
+        .order_by(Transaction.event_date, Transaction.id, Posting.id)
+    ).all()
+    saida, corrente = [], 0
+    for p, t, a in rows:
+        sinal = 1 if conta.type in DEBIT_NATURE else -1
+        delta_na_conta = p.amount_cents * sinal
+        corrente += delta_na_conta
+        saida.append({
+            "transaction_id": t.id, "date": t.event_date.isoformat(), "description": t.description,
+            "account_code": a.code, "delta_cents": delta_na_conta, "running_cents": corrente,
+            "competence": p.competence_month.isoformat(), "obligation_id": p.obligation_id,
+        })
+    return saida

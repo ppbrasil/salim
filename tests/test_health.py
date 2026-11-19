@@ -1,10 +1,4 @@
-from fastapi.testclient import TestClient
-
-from salim.app import create_app
-
-
-def test_health():
-    client = TestClient(create_app())
+def test_health(client):
     r = client.get("/health")
     assert r.status_code == 200
     assert r.json() == {"status": "ok"}

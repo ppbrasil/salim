@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ conta.name }} · Salim{% endblock %}
+{% block content %}
+<p><a href="/ui/accounts">← Plano de contas</a></p>
+<h1>{{ conta.code }} · {{ conta.name }}</h1>
+<table>
+  <thead><tr><th>Data</th><th>Descrição</th><th>Conta</th><th>Competência</th><th class="num">Valor</th><th class="num">Saldo</th></tr></thead>
+  <tbody>
+  {% for l in linhas %}
+    <tr>
+      <td>{{ l.date | data }}</td><td>{{ l.description }}</td><td class="muted">{{ l.account_code }}</td>
+      <td>{{ l.competence | mes }}</td>
+      <td class="num {{ 'neg' if l.delta_cents < 0 else '' }}">{{ l.delta_cents | brl }}</td>
+      <td class="num {{ 'neg' if l.running_cents < 0 else '' }}">{{ l.running_cents | brl }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">Sem lançamentos.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Plano de contas · Salim{% endblock %}
+{% block content %}
+<h1>Plano de contas</h1>
+<table>
+  <thead><tr><th>Conta</th><th>Tipo</th><th class="num">Saldo</th></tr></thead>
+  <tbody>
+  {% for depth, c, saldo in rows %}
+    <tr class="{{ 'group' if c.is_group else '' }}">
+      <td style="padding-left: {{ 0.6 + depth * 1.4 }}rem">
+        <a href="/ui/accounts/{{ c.code }}">{{ c.code }} · {{ c.name }}</a>
+        {% if c.is_temporary %}<span class="muted">(temporária)</span>{% endif %}
+      </td>
+      <td class="muted">{{ c.type.value }}</td>
+      <td class="num {{ 'neg' if saldo < 0 else '' }}">{{ saldo | brl }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
