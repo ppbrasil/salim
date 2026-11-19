@@ -5,7 +5,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import date
 
-from salim import ledger, proposals, queries
+from salim import ledger, nlentry, proposals, queries
 from salim.money import brl, parse_brl
 
 AJUDA = ("Comandos:\n/saldo [conta] — saldo do caixa ou de uma conta\n/orcamento — orçado × realizado do mês\n"
@@ -35,8 +35,9 @@ def _dm(iso: str) -> str:
 
 
 class Bot:
-    def __init__(self, session_factory, allowed_ids: set[int], clock=date.today, remember_updates: int = 1000):
-        self.sf, self.allowed, self.clock = session_factory, set(allowed_ids), clock
+    def __init__(self, session_factory, allowed_ids: set[int], clock=date.today, remember_updates: int = 1000,
+                 interpreter=None):
+        self.sf, self.allowed, self.clock, self.interpreter = session_factory, set(allowed_ids), clock, interpreter
         self.pending: dict[int, dict] = {}
         self.seen: OrderedDict[int, None] = OrderedDict()
         self.remember = remember_updates
@@ -55,6 +56,8 @@ class Bot:
             self.seen[uid] = None
             while len(self.seen) > self.remember:
                 self.seen.popitem(last=False)
+        if not texto.startswith("/"):
+            return [Reply(chat, self._texto_livre(chat, uid, texto))]
         cmd, _, resto = texto.partition(" ")
         cmd = cmd.lower().split("@")[0]
         handler = {"/saldo": self._saldo, "/orcamento": self._orcamento, "/faturas": self._faturas,
@@ -102,6 +105,16 @@ class Bot:
             linhas.append(f"{_dm(i['due_date'])} {nome} — {brl(i['balance_cents'])} ({situacao})")
         return "\n".join(linhas + [f"Total: {brl(sum(i['balance_cents'] for i in itens))}"])
 
+    def _texto_livre(self, chat, uid, texto):
+        with self.sf() as s:
+            p = nlentry.parse_entry_text(s, texto, self.clock(), fallback=self.interpreter)
+        if p is None:
+            return "Não entendi. " + AJUDA
+        if not p["ok"]:
+            return ("Entendi o valor, mas não identifiquei a categoria. Diga a conta com "
+                    "/lancar <valor> <débito> <crédito> <descrição>.")
+        return self._mostrar(chat, uid, p)
+
     def _lancar(self, chat, uid, arg):
         self.pending.pop(chat, None)
         partes = arg.split(None, 3)
@@ -118,6 +131,9 @@ class Bot:
                                          debit_account=partes[1], credit_account=partes[2])
         if not p["ok"]:
             return "Não deu certo: " + "; ".join(p["errors"])
+        return self._mostrar(chat, uid, p)
+
+    def _mostrar(self, chat, uid, p):
         self.pending[chat] = {"proposal": p, "ref": f"tg:{chat}:{uid}"}
         d, c = p["entries"]
         return (f"Lançamento {_dm(p['event_date'])} — {p['description']}\n"
