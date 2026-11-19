@@ -108,17 +108,15 @@ class Entry:
     obligation_id: int | None = None  # obrigatório em conta que controla títulos
 
 
-def post_transaction(
-    session: Session, *, event_date: date, description: str, entries: list[Entry],
-    reverses_id: int | None = None,
-) -> Transaction:
+def _check_entries(session: Session, entries: list[Entry]) -> list[Account]:
+    """Valida as partidas (sem tocar no banco) e devolve as contas resolvidas."""
     if len(entries) < 2:
         raise InvalidTransactionError("lançamento precisa de ao menos 2 partidas")
     if any(e.amount_cents == 0 for e in entries):
         raise InvalidTransactionError("partida com valor zero")
     if sum(e.amount_cents for e in entries) != 0:
         raise UnbalancedTransactionError("soma das partidas deve ser zero")
-    contas = [get_account(session, e.account_code) for e in entries]  # falha antes de tocar no banco
+    contas = [get_account(session, e.account_code) for e in entries]
     for e, conta in zip(entries, contas):
         if conta.is_group:
             raise InvalidTransactionError(f"conta {conta.code} é um grupo e não recebe lançamento")
@@ -130,16 +128,46 @@ def post_transaction(
             obl = session.get(Obligation, e.obligation_id)
             if obl is None or obl.account_id != conta.id:
                 raise InvalidTransactionError(f"título {e.obligation_id} não pertence à conta {conta.code}")
-    tx = Transaction(event_date=event_date, description=description, reverses_id=reverses_id)
+    return contas
+
+
+def new_transaction(
+    session: Session, *, event_date: date, description: str, kind: str = "general",
+    reverses_id: int | None = None, source: str = "web", external_ref: str | None = None,
+) -> Transaction:
+    """Abre um lançamento (flush, sem commit). Use post_into para gravar as partidas e fechar."""
+    tx = Transaction(event_date=event_date, description=description, kind=kind,
+                     reverses_id=reverses_id, source=source, external_ref=external_ref)
     session.add(tx)
     session.flush()
-    for e, conta in zip(entries, contas):
-        session.add(Posting(
-            transaction_id=tx.id, account_id=conta.id, amount_cents=e.amount_cents,
-            competence_month=month_start(e.competence or event_date), obligation_id=e.obligation_id,
-        ))
-    session.commit()
     return tx
+
+
+def post_into(session: Session, tx: Transaction, entries: list[Entry]) -> Transaction:
+    """Valida e grava as partidas de um lançamento já aberto; commit ao final. Em erro, desfaz tudo."""
+    try:
+        contas = _check_entries(session, entries)
+        for e, conta in zip(entries, contas):
+            session.add(Posting(
+                transaction_id=tx.id, account_id=conta.id, amount_cents=e.amount_cents,
+                competence_month=month_start(e.competence or tx.event_date), obligation_id=e.obligation_id,
+            ))
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    return tx
+
+
+def post_transaction(
+    session: Session, *, event_date: date, description: str, entries: list[Entry],
+    reverses_id: int | None = None, kind: str = "general", source: str = "web",
+    external_ref: str | None = None,
+) -> Transaction:
+    _check_entries(session, entries)  # falha antes de tocar no banco
+    tx = new_transaction(session, event_date=event_date, description=description, kind=kind,
+                         reverses_id=reverses_id, source=source, external_ref=external_ref)
+    return post_into(session, tx, entries)
 
 
 DEBIT_NATURE = (AccountType.ASSET, AccountType.EXPENSE)
