@@ -2,7 +2,7 @@
 name = "salim"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["fastapi", "sqlalchemy>=2", "jinja2", "mcp", "uvicorn", "python-multipart", "tzdata"]
+dependencies = ["fastapi", "sqlalchemy>=2", "jinja2", "mcp", "uvicorn", "python-multipart", "tzdata", "psycopg[binary]"]
 
 [project.optional-dependencies]
 dev = ["pytest", "httpx", "psycopg[binary]"]
