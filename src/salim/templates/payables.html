@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}A pagar · Salim{% endblock %}
+{% macro tabela(itens) %}
+<table>
+  <thead><tr><th>Vencimento</th><th>Título</th><th>Situação</th><th>Planejado</th><th class="num">Saldo</th></tr></thead>
+  <tbody>
+  {% for v in itens %}
+    <tr>
+      <td>{{ v.due_date.isoformat() | data }}</td>
+      <td>{{ v.counterparty or '' }} {{ v.reference or v.kind }}
+          {% if v.installment_no %}<span class="muted">({{ v.installment_no }}/{{ v.installment_total }})</span>{% endif %}</td>
+      <td class="{{ v.status }}">{{ v.status.replace('_', ' ') }}{% if v.status == 'atrasada' %} · {{ v.days_late }} dias{% endif %}</td>
+      <td class="muted">{{ v.planned_date.isoformat() | data if v.planned_date else '' }}</td>
+      <td class="num">{{ v.balance_cents | brl }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">Nada em aberto.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+{% block content %}
+<h1>A pagar</h1>
+<p>Total em aberto: <strong>{{ total_pagar | brl }}</strong> <span class="muted">(posição em {{ hoje.isoformat() | data }})</span></p>
+{{ tabela(pagar) }}
+<h2>A receber</h2>
+<p>Total: <strong>{{ total_receber | brl }}</strong></p>
+{{ tabela(receber) }}
+{% endblock %}

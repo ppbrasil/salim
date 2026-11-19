@@ -35,6 +35,7 @@ class ObligationView:
     balance_cents: int
     status: str
     days_late: int
+    direction: str  # 'pagar' (passivo) ou 'receber' (ativo)
 
 
 def create_obligation(
@@ -88,7 +89,8 @@ def _views(session: Session, today: date, where=None) -> list[ObligationView]:
             id=o.id, account_code=a.code, kind=o.kind, reference=o.reference, counterparty=o.counterparty,
             due_date=o.due_date, closing_date=o.closing_date, planned_date=o.planned_date,
             installment_no=o.installment_no, installment_total=o.installment_total,
-            balance_cents=saldo, status=st, days_late=atraso))
+            balance_cents=saldo, status=st, days_late=atraso,
+            direction="receber" if a.type in DEBIT_NATURE else "pagar"))
     return saida
 
 
