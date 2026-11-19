@@ -1,11 +1,10 @@
 """Bot do Telegram: comandos simples, só para IDs autorizados, lançamento com confirmação e idempotente."""
 import json
 import urllib.request
-from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import date
 
-from salim import ledger, nlentry, proposals, queries
+from salim import botstate, ledger, nlentry, proposals, queries
 from salim.channels import Incoming, TelegramChannel
 from salim.money import brl, parse_brl
 
@@ -40,8 +39,6 @@ class Bot:
                  interpreter=None, channel=None):
         self.sf, self.allowed, self.clock, self.interpreter = session_factory, set(allowed_ids), clock, interpreter
         self.channel = channel or TelegramChannel()
-        self.pending: dict[int, dict] = {}
-        self.seen: OrderedDict[int, None] = OrderedDict()
         self.remember = remember_updates
 
     # ------------------------------------------------------------ entrada
@@ -54,11 +51,9 @@ class Bot:
             return []
         chat, uid, texto = inc.chat_id, inc.msg_id, inc.text
         if uid is not None:
-            if uid in self.seen:
-                return []
-            self.seen[uid] = None
-            while len(self.seen) > self.remember:
-                self.seen.popitem(last=False)
+            with self.sf() as s:
+                if not botstate.first_time(s, self.channel.name, uid, self.remember):
+                    return []
         if not texto.startswith("/"):
             return [Reply(chat, self._texto_livre(chat, uid, texto))]
         cmd, _, resto = texto.partition(" ")
@@ -119,7 +114,7 @@ class Bot:
         return self._mostrar(chat, uid, p)
 
     def _lancar(self, chat, uid, arg):
-        self.pending.pop(chat, None)
+        self._descartar(chat)
         partes = arg.split(None, 3)
         if len(partes) < 4:
             return "Uso: /lancar <valor> <conta débito> <conta crédito> <descrição>"
@@ -137,7 +132,8 @@ class Bot:
         return self._mostrar(chat, uid, p)
 
     def _mostrar(self, chat, uid, p):
-        self.pending[chat] = {"proposal": p, "ref": f"{self.channel.ref_prefix}:{chat}:{uid}"}
+        with self.sf() as s:
+            botstate.put_pending(s, self.channel.name, chat, p, f"{self.channel.ref_prefix}:{chat}:{uid}")
         d, c = p["entries"]
         return (f"Lançamento {_dm(p['event_date'])} — {p['description']}\n"
                 f"Débito: {d['account_name']} ({d['account_code']}) {brl(d['amount_cents'])}\n"
@@ -145,7 +141,8 @@ class Bot:
                 "Responda /ok para registrar ou /cancelar.")
 
     def _ok(self, chat, uid, arg):
-        item = self.pending.pop(chat, None)
+        with self.sf() as s:
+            item = botstate.pop_pending(s, self.channel.name, chat)
         if item is None:
             return "Nada pendente."
         with self.sf() as s:
@@ -155,5 +152,9 @@ class Bot:
                 return f"Não registrei: {e}"
         return "Esse lançamento já estava registrado." if r["duplicate"] else f"Registrado (#{r['transaction_id']})."
 
+    def _descartar(self, chat) -> bool:
+        with self.sf() as s:
+            return botstate.pop_pending(s, self.channel.name, chat) is not None
+
     def _cancelar(self, chat, uid, arg):
-        return "Proposta cancelada." if self.pending.pop(chat, None) else "Nada pendente."
+        return "Proposta cancelada." if self._descartar(chat) else "Nada pendente."

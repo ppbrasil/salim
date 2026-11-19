@@ -41,10 +41,10 @@ def _tabelas(eng):
 
 def test_aplica_migracoes_num_banco_vazio_e_registra(engine):
     aplicadas = apply_migrations(engine)
-    assert aplicadas == ["0001_initial"]
+    assert aplicadas[0] == "0001_initial" and aplicadas == sorted(aplicadas)
     assert {"accounts", "postings", "transactions", "obligations", "schema_migrations"} <= _tabelas(engine)
     with engine.connect() as c:
-        assert c.execute(text("select version from schema_migrations")).scalars().all() == ["0001_initial"]
+        assert c.execute(text("select version from schema_migrations order by version")).scalars().all() == aplicadas
 
 
 def test_segunda_execucao_nao_faz_nada(engine):

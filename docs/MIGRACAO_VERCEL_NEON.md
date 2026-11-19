@@ -65,7 +65,7 @@ Este documento mapeia, no código real, o que precisa mudar. Regra de trabalho m
 | M1 ✅ | `schema_pg.sql` (tipos reais, identity, triggers plpgsql, views corrigidas) + `db.py` com caminho PG + `conftest` parametrizado por `SALIM_TEST_DB_URL` (TRUNCATE entre testes) | schema carrega no PG; imutabilidade e integridade já passam; suíte no PG: **197 verdes, 52 vermelhas** (lista abaixo) |
 | M2 ✅ | Casts e SQL cru em `reports.py` e `nlentry.py` (SUM→BIGINT, GROUP BY, datas) | testes de DRE, caixa, orçamento verdes no PG (249 verdes) |
 | M3 ✅ | `salim.migrate` + `schema_migrations` + seed fora da partida | `create_app` não escreve no banco; migrate idempotente |
-| M4 | Estado do bot em tabelas (`bot_pending`, `bot_seen`) | testes do Telegram/WhatsApp verdes, reinício do processo não perde proposta |
+| M4 ✅ | Estado do bot em tabelas (`bot_pending`, `bot_seen`) | testes do Telegram/WhatsApp verdes, reinício do processo não perde proposta |
 | M5 | `LoginLimiter` em tabela | trava persiste entre instâncias (teste com duas instâncias) |
 | M6 | `salim.clock.today()` em America/Sao_Paulo | teste às 23h30 BRT devolve o dia local, não o UTC |
 | M7 | Engine serverless (NullPool, pooler, retry de cold start, `DATABASE_URL`) | teste de conexão contra Neon real (manual, uma vez) |

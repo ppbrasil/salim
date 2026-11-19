@@ -85,6 +85,23 @@ CREATE TABLE import_items (
   transaction_id INTEGER REFERENCES transactions(id)
 );
 
+-- 7. ESTADO DOS BOTS (proposta pendente por chat; updates já processados) ----------------
+CREATE TABLE bot_pending (
+  channel    TEXT NOT NULL,
+  chat_id    TEXT NOT NULL,
+  proposal   TEXT NOT NULL,
+  ref        TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f','now')),
+  PRIMARY KEY (channel, chat_id)
+);
+
+CREATE TABLE bot_seen (
+  seq     INTEGER PRIMARY KEY AUTOINCREMENT,
+  channel TEXT NOT NULL,
+  msg_id  TEXT NOT NULL,
+  UNIQUE (channel, msg_id)
+);
+
 -- INTEGRIDADE NO BANCO ---------------------------------------------------------
 CREATE TRIGGER trg_posting_rules BEFORE INSERT ON postings
 BEGIN
