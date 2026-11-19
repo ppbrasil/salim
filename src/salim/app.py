@@ -1,15 +1,17 @@
+import logging
 import os
 from datetime import date
 from pathlib import Path
 
 from contextlib import contextmanager
-from decimal import Decimal, InvalidOperation
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
+from salim.money import brl, parse_brl
+from salim.telegram import Bot, HttpSender
 from salim import budget as bud, ledger, obligations as obl, reports
 from salim.chart import seed_chart
 from salim.db import make_session_factory
@@ -18,20 +20,6 @@ from salim.models import Account, AccountType
 
 MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-
-
-def brl(cents: int) -> str:
-    texto = f"{abs(cents) / 100:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    return f"{'-' if cents < 0 else ''}R$ {texto}"
-
-
-def parse_brl(texto: str) -> int:
-    """'3.000,00' -> 300000. Levanta ValueError se não for número."""
-    limpo = texto.strip().replace(".", "").replace(",", ".")
-    try:
-        return int((Decimal(limpo) * 100).to_integral_value())
-    except InvalidOperation:
-        raise ValueError(texto)
 
 
 templates.env.filters["brl"] = brl
@@ -164,7 +152,12 @@ def _default_factory():
     return make_session_factory(url)
 
 
-def create_app(session_factory=None) -> FastAPI:
+def _env_ids() -> set[int]:
+    return {int(x) for x in os.environ.get("TELEGRAM_ALLOWED_IDS", "").split(",") if x.strip()}
+
+
+def create_app(session_factory=None, *, telegram_sender=None, telegram_allowed_ids=None,
+               telegram_secret=None) -> FastAPI:
     sf = session_factory or _default_factory()
     with sf() as s:
         if s.query(Account).first() is None:
@@ -172,6 +165,22 @@ def create_app(session_factory=None) -> FastAPI:
 
     app = FastAPI(title="Salim")
     app.state.sf = sf
+
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    sender = telegram_sender or (HttpSender(token) if token else (lambda chat, texto: None))
+    segredo = telegram_secret if telegram_secret is not None else os.environ.get("TELEGRAM_WEBHOOK_SECRET")
+    bot = Bot(sf, telegram_allowed_ids if telegram_allowed_ids is not None else _env_ids())
+
+    @app.post("/telegram/webhook")
+    async def telegram_webhook(request: Request):
+        if segredo and request.headers.get("X-Telegram-Bot-Api-Secret-Token") != segredo:
+            raise HTTPException(403, "segredo inválido")
+        for r in bot.handle(await request.json()):
+            try:
+                sender(r.chat_id, r.text)
+            except Exception:  # resposta perdida é melhor que 500: o Telegram reenviaria o update em loop
+                logging.getLogger("salim.telegram").exception("falha ao enviar resposta")
+        return {"ok": True}
 
     def get_session():
         with sf() as s:

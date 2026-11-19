@@ -21,3 +21,15 @@ def client():
     with TestClient(create_app(factory)) as c:
         yield c
     factory.kw["bind"].dispose()
+
+
+class _Ctx:
+    """Entrega a sessão do teste como context manager, sem fechá-la."""
+    def __init__(self, s): self.s = s
+    def __enter__(self): return self.s
+    def __exit__(self, *a): return False
+
+
+@pytest.fixture
+def ctx_factory(session):
+    return lambda: _Ctx(session)
