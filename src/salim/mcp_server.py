@@ -10,6 +10,7 @@ from functools import wraps
 from mcp.server.mcpserver import MCPServer
 
 from salim import ledger, obligations, proposals, queries
+from salim.clock import today as clock_today
 from salim.budget import BudgetError
 
 _BUSINESS = (ledger.AccountNotFoundError, ledger.InvalidAccountError, ledger.InvalidTransactionError,
@@ -29,7 +30,7 @@ def _safe(fn):
     return wrapper
 
 
-def build_server(session_factory, clock=date.today) -> MCPServer:
+def build_server(session_factory, clock=clock_today) -> MCPServer:
     server = MCPServer("salim", instructions=(
         "Controle financeiro por partidas dobradas. Valores em centavos (BRL). Débito positivo, crédito negativo. "
         "Para lançar: propose_transaction (não grava) → mostre ao usuário → confirm_transaction."))

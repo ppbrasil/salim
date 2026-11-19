@@ -9,6 +9,7 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from salim.clock import today as clock_today
 from salim.db import sum_cents
 from salim.ledger import DEBIT_NATURE, Entry, get_account, new_transaction, post_into
 from salim.models import Account, Obligation, Posting, Transaction
@@ -116,7 +117,7 @@ def list_obligations(
 
 
 def _balance(session: Session, obligation_id: int) -> int:
-    return get_obligation(session, obligation_id, today=date.today()).balance_cents
+    return get_obligation(session, obligation_id, today=clock_today()).balance_cents
 
 
 def register_bill(

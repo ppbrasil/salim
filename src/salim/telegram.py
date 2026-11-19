@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from salim import botstate, ledger, nlentry, proposals, queries
+from salim.clock import today as clock_today
 from salim.channels import Incoming, TelegramChannel
 from salim.money import brl, parse_brl
 
@@ -35,7 +36,7 @@ def _dm(iso: str) -> str:
 
 
 class Bot:
-    def __init__(self, session_factory, allowed_ids: set[int], clock=date.today, remember_updates: int = 1000,
+    def __init__(self, session_factory, allowed_ids: set[int], clock=clock_today, remember_updates: int = 1000,
                  interpreter=None, channel=None):
         self.sf, self.allowed, self.clock, self.interpreter = session_factory, set(allowed_ids), clock, interpreter
         self.channel = channel or TelegramChannel()

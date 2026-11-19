@@ -19,6 +19,7 @@ from salim.channels import WhatsAppChannel, WhatsAppSender
 from salim.telegram import Bot, HttpSender
 from salim import bankimport as imp, budget as bud, ledger, obligations as obl, reports
 from salim.chart import seed_chart
+from salim.clock import today as clock_today
 from salim.db import make_session_factory
 from salim.models import Account, AccountType
 
@@ -339,13 +340,13 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
     @app.get("/obligations")
     def list_obligations(today: date | None = None, status: str | None = None, include_settled: bool = False,
                          session=Depends(get_session)):
-        return obl.list_obligations(session, today or date.today(), status=status, include_settled=include_settled)
+        return obl.list_obligations(session, today or clock_today(), status=status, include_settled=include_settled)
 
     @app.post("/obligations/bills", status_code=201)
     def create_bill(body: BillIn, session=Depends(get_session)):
         with business_errors():
             o = obl.register_bill(session, **body.model_dump())
-            return obl.get_obligation(session, o.id, date.today())
+            return obl.get_obligation(session, o.id, clock_today())
 
     @app.post("/card-purchases", status_code=201)
     def card_purchase(body: CardPurchaseIn, session=Depends(get_session)):
@@ -354,7 +355,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
                 session, card_code=body.card_code, event_date=body.event_date, description=body.description,
                 items=[(i.account_code, i.amount_cents) for i in body.items], installments=body.installments,
                 competence=body.competence)
-            return [obl.get_obligation(session, f.id, date.today()) for f in faturas]
+            return [obl.get_obligation(session, f.id, clock_today()) for f in faturas]
 
     @app.post("/obligations/settle", status_code=201)
     def settle(body: SettleIn, session=Depends(get_session)):
@@ -369,25 +370,25 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
     def consolidate(body: ConsolidateIn, session=Depends(get_session)):
         with business_errors():
             novo = obl.consolidate_obligations(session, **body.model_dump())
-            return obl.get_obligation(session, novo.id, date.today())
+            return obl.get_obligation(session, novo.id, clock_today())
 
     @app.post("/obligations/{obligation_id}/installments", status_code=201)
     def installments(obligation_id: int, body: InstallmentsIn, session=Depends(get_session)):
         with business_errors():
             parcelas = obl.installment_obligation(session, obligation_id, **body.model_dump())
-            return [obl.get_obligation(session, p.id, date.today()) for p in parcelas]
+            return [obl.get_obligation(session, p.id, clock_today()) for p in parcelas]
 
     @app.post("/obligations/{obligation_id}/reschedule")
     def reschedule(obligation_id: int, body: RescheduleIn, session=Depends(get_session)):
         with business_errors():
             obl.reschedule_obligation(session, obligation_id, **body.model_dump())
-            return obl.get_obligation(session, obligation_id, date.today())
+            return obl.get_obligation(session, obligation_id, clock_today())
 
     @app.post("/reimbursable-expenses", status_code=201)
     def reimbursable(body: ReimbursableIn, session=Depends(get_session)):
         with business_errors():
             o = obl.register_reimbursable_expense(session, **body.model_dump())
-            return obl.get_obligation(session, o.id, date.today())
+            return obl.get_obligation(session, o.id, clock_today())
 
     # ---------------------------------------------------------------- importação
     def _item(i):
@@ -431,7 +432,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
 
     @app.get("/reports/cash-future")
     def api_cash_future(today: date | None = None, months: int = 6, session=Depends(get_session)):
-        return [{**vars(m), "net_cents": m.net_cents} for m in reports.cash_future(session, today or date.today(), months)]
+        return [{**vars(m), "net_cents": m.net_cents} for m in reports.cash_future(session, today or clock_today(), months)]
 
     @app.put("/budget")
     def api_set_budget(body: BudgetIn, session=Depends(get_session)):
@@ -442,7 +443,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
 
     @app.get("/budget")
     def api_budget(month: date | None = None, today: date | None = None, session=Depends(get_session)):
-        hoje = today or date.today()
+        hoje = today or clock_today()
         return [vars(l) for l in bud.budget_vs_actual(session, month or hoje, hoje)]
 
     # ---------------------------------------------------------------- telas
@@ -467,7 +468,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
 
     @app.get("/ui/payables")
     def ui_payables(request: Request, today: date | None = None, session=Depends(get_session)):
-        hoje = today or date.today()
+        hoje = today or clock_today()
         todas = obl.list_obligations(session, hoje)
         pagar = [v for v in todas if v.direction == "pagar"]
         receber = [v for v in todas if v.direction == "receber"]
@@ -478,12 +479,12 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
 
     @app.get("/ui/reports/dre")
     def ui_dre(request: Request, start: date | None = None, end: date | None = None, session=Depends(get_session)):
-        inicio = start or ledger.month_start(date.today())
+        inicio = start or ledger.month_start(clock_today())
         return templates.TemplateResponse(request, "dre.html", {"r": reports.dre(session, inicio, end)})
 
     @app.get("/ui/reports/cash")
     def ui_cash(request: Request, today: date | None = None, session=Depends(get_session)):
-        hoje = today or date.today()
+        hoje = today or clock_today()
         inicio = ledger.month_start(hoje)
         passado = reports.cash_executed(session, date(inicio.year - (inicio.month <= 5), (inicio.month - 6) % 12 + 1, 1), inicio)
         return templates.TemplateResponse(request, "cash.html", {
@@ -497,7 +498,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
 
     @app.get("/ui/budget")
     def ui_budget(request: Request, month: date | None = None, today: date | None = None, session=Depends(get_session)):
-        hoje = today or date.today()
+        hoje = today or clock_today()
         return _budget_page(request, session, month or hoje, hoje)
 
     @app.post("/ui/budget")
@@ -513,7 +514,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
             bud.set_budget(session, form.get("account_code", "").strip(), valor, month=mes,
                            profile=form.get("profile", "spread"), day_of_month=dia)
         except bud.BudgetError as e:
-            return _budget_page(request, session, date.today(), date.today(), form, str(e), 422)
+            return _budget_page(request, session, clock_today(), clock_today(), form, str(e), 422)
         return RedirectResponse("/ui/budget", status_code=303)
 
     def _form_page(request, session, form, erro=None, status=200):
@@ -523,7 +524,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
 
     @app.get("/ui/transactions/new")
     def ui_new_transaction(request: Request, session=Depends(get_session)):
-        return _form_page(request, session, {"date": date.today().isoformat()})
+        return _form_page(request, session, {"date": clock_today().isoformat()})
 
     @app.post("/ui/transactions")
     async def ui_create_transaction(request: Request, session=Depends(get_session)):
