@@ -104,6 +104,11 @@ Próximo (conciliação): conferir o devido de cada cartão com o extrato/fatura
 
 O plano nasce do padrão (`seed_chart`) e é da pessoa para editar. Pendente: padrão de receita em dois níveis (hoje `4.01 Salário` e `4.02 Outras` são linhas soltas), conciliação de cartões, marcar compra como reembolsável.
 
+## E15 — Orçamento por linha
+- **15.1 Planejar orçamento** (feito): `/ui/budget/plan` lista receitas e despesas em dois níveis, com o campo de orçamento padrão por linha ao lado da média dos últimos 6 meses fechados (competência, sem o mês corrente; começa no primeiro mês com movimento). Grupo mostra a média e a soma dos orçamentos das linhas; perfil (diluído/pontual) e dia são preservados ao salvar; valor inválido não grava nada.
+- **15.2 Comparativo com as famílias brasileiras** (feito, versão de referência): fatia do grupo no total orçado (ou no gasto médio, se não há orçamento) contra a média do IBGE/POF 2017-18 (moradia 36,6%, transporte 18,1%, alimentação 17,5%, saúde 8,0%), em "abaixo / na média / acima" (±25%). Só despesas e só grupos com referência.
+- **15.3 Comparativo com outros usuários** (pendente): exige base multiusuário (hoje o sistema é uma instalação por usuário). Quando houver, trocar a referência por faixa baixa/típica/alta calculada de agregados anônimos, mantendo os rótulos simples.
+
 ## E10 Migração para Vercel + Neon ⬜ (plano em `docs/MIGRACAO_VERCEL_NEON.md`)
 M0 ✅ Postgres de teste (compose + CI) · M1 ✅ `schema_pg.sql` + testes parametrizados (197 verdes no PG, 52 na lista da M2) · M2 ✅ SQL cru e casts (PG 249 verdes, CI bloqueante nos dois bancos) · M3 ✅ migrações fora da partida (`python -m salim.migrate [--seed]`, lock consultivo, 1 transação por arquivo; PG 256 verdes) · M4 ✅ estado do bot em tabelas `bot_pending`/`bot_seen` (PG 264 verdes) · M5 ✅ trava de login em tabela `login_throttle` (PG 268 verdes) · M6 ✅ fuso America/Sao_Paulo (`salim.clock.today`, PG 274 verdes) · M7 ✅ engine serverless (NullPool, SSL, retry de cold start, `DATABASE_URL`; falta só a conexão com o Neon real) · M8 🟡 deploy Vercel + webhook Telegram (código pronto: `api/index.py`, `vercel.json`; falta Neon + variáveis + deploy + `setWebhook`) · M9 backup `pg_dump` no GitHub Actions + restauração · M10 corte (remove SQLite)
 
@@ -115,9 +120,3 @@ E0–E9 e E12 implementados, em produção na Vercel + Neon (telas de DRE, caixa
 - Soma do lançamento = 0 é validada no serviço, não no banco (SQLite sem constraint diferida).
 - Aging histórico ("como estava em outubro") precisa filtrar por `event_date`.
 - Ordenação de códigos de conta é lexicográfica; o plano padrão usa 2 dígitos por nível.
-
-
-## E15 — Orçamento por linha
-- **15.1 Planejar orçamento** (feito): `/ui/budget/plan` lista receitas e despesas em dois níveis, com o campo de orçamento padrão por linha ao lado da média dos últimos 6 meses fechados (competência, sem o mês corrente; começa no primeiro mês com movimento). Grupo mostra a média e a soma dos orçamentos das linhas; perfil (diluído/pontual) e dia são preservados ao salvar; valor inválido não grava nada.
-- **15.2 Comparativo com as famílias brasileiras** (feito, versão de referência): fatia do grupo no total orçado (ou no gasto médio, se não há orçamento) contra a média do IBGE/POF 2017-18 (moradia 36,6%, transporte 18,1%, alimentação 17,5%, saúde 8,0%), em "abaixo / na média / acima" (±25%). Só despesas e só grupos com referência.
-- **15.3 Comparativo com outros usuários** (pendente): exige base multiusuário (hoje o sistema é uma instalação por usuário). Quando houver, trocar a referência por faixa baixa/típica/alta calculada de agregados anônimos, mantendo os rótulos simples.
