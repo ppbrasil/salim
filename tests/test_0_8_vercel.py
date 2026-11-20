@@ -19,6 +19,7 @@ def entrada(monkeypatch):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     yield mod
+    mod.app.state.sf.kw["bind"].dispose()      # sem isso a conexão SQLite vaza e o aviso estoura em outro teste
     sys.modules.pop("vercel_entrada", None)
 
 
@@ -120,6 +121,7 @@ def entrada_com_login(monkeypatch):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     yield mod
+    mod.app.state.sf.kw["bind"].dispose()
     sys.modules.pop("vercel_entrada2", None)
 
 
