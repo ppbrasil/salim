@@ -17,7 +17,7 @@ from salim.money import brl, parse_brl
 from salim.auth import AuthConfig, LoginLimiter, make_session, read_session, verify_password
 from salim.channels import WhatsAppChannel, WhatsAppSender
 from salim.telegram import Bot, HttpSender
-from salim import bankimport as imp, budget as bud, ledger, obligations as obl, reports
+from salim import bankimport as imp, budget as bud, ledger, obligations as obl, reports, viz
 from salim.chart import seed_chart
 from salim.clock import today as clock_today
 from salim.db import make_session_factory
@@ -31,6 +31,9 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 templates.env.filters["brl"] = brl
 templates.env.filters["data"] = lambda iso: f"{iso[8:10]}/{iso[5:7]}/{iso[:4]}"
 templates.env.filters["mes"] = lambda iso: f"{MESES[int(iso[5:7]) - 1]}/{iso[:4]}"
+templates.env.filters["mes_curto"] = viz.mes_curto
+templates.env.filters["num"] = lambda c: brl(c).replace("R$ ", "")
+templates.env.globals.update(bar_chart=viz.bar_chart, legend=viz.legend, sparkline=viz.sparkline)
 
 
 class EntryIn(BaseModel):
@@ -506,10 +509,50 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
             "total_pagar": sum(v.balance_cents for v in pagar if v.balance_cents > 0),
             "total_receber": sum(v.balance_cents for v in receber if v.balance_cents > 0)})
 
+    def _mes(v: str | None) -> date | None:
+        """Aceita 'AAAA-MM' (campo month do HTML) ou uma data completa."""
+        if not v:
+            return None
+        try:
+            return ledger.month_start(date.fromisoformat(v if len(v) > 7 else v + "-01"))
+        except ValueError:
+            raise HTTPException(422, f"mês inválido: {v}")
+
+    def _janela(session, start, end, hoje, max_meses=12):
+        """Período padrão: do primeiro mês com movimento até o mês corrente, no máximo `max_meses` meses."""
+        atual = ledger.month_start(hoje)
+        ultimo = reports.last_activity_month(session)
+        fim = _mes(end) or (min(atual, ultimo) if ultimo else atual)   # mês corrente ainda vazio não entra na média
+        if _mes(start):
+            return _mes(start), fim
+        primeiro = reports.first_activity_month(session) or fim
+        y, m = reports._shift(fim.year, fim.month, -(max_meses - 1))
+        return max(primeiro, date(y, m, 1)), fim
+
     @app.get("/ui/reports/dre")
-    def ui_dre(request: Request, start: date | None = None, end: date | None = None, session=Depends(get_session)):
-        inicio = start or ledger.month_start(clock_today())
-        return templates.TemplateResponse(request, "dre.html", {"r": reports.dre(session, inicio, end)})
+    def ui_dre(request: Request, start: str | None = None, end: str | None = None, today: date | None = None,
+               session=Depends(get_session)):
+        hoje = today or clock_today()
+        if start and not end:       # só o início informado: um mês
+            ini = fim = _mes(start)
+        else:
+            ini, fim = _janela(session, start, end, hoje)
+        if fim < ini:
+            ini, fim = fim, ini
+        m = reports.dre_monthly(session, ini, fim)
+        n = len(m.months)
+        grupos = [r for r in m.rows if r.type == "expense" and r.depth == 1]
+        top = sorted(grupos, key=lambda r: -r.total_cents)[:7]
+        top_codes = sorted(g.code for g in top)
+        cor = {c: i + 1 for i, c in enumerate(top_codes)}
+        empilhado = [(g.name, cor[g.code], g.cents) for g in sorted(top, key=lambda r: r.code)]
+        resto = [sum(g.cents[i] for g in grupos if g.code not in cor) for i in range(n)]
+        if any(resto):
+            empilhado.append(("Outros", 9, resto))
+        return templates.TemplateResponse(request, "dre.html", {
+            "m": m, "n": n, "ini": ini, "fim": fim,
+            "rec_desp": [("Receitas", 1, m.income), ("Despesas", 2, m.expense)], "empilhado": empilhado,
+            "resultado": m.result, "tot_rec": sum(m.income), "tot_desp": sum(m.expense)})
 
     @app.get("/ui/reports/cash")
     def ui_cash(request: Request, today: date | None = None, session=Depends(get_session)):

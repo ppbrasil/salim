@@ -1,18 +1,54 @@
 {% extends "base.html" %}
 {% block title %}DRE · Salim{% endblock %}
+{% block main_class %}wide{% endblock %}
 {% block content %}
-<h1>DRE por competência</h1>
-<p class="muted">{{ r.start.isoformat() | mes }}{% if r.end != r.start %} a {{ r.end.isoformat() | mes }}{% endif %} · inclui o que ainda não foi pago</p>
-<form method="get"><label>De <input type="date" name="start" value="{{ r.start.isoformat() }}"></label>
-  <label>até <input type="date" name="end" value="{{ r.end.isoformat() }}"></label> <button>Ver</button></form>
-<table>
-  <thead><tr><th>Conta</th><th class="num">Valor</th></tr></thead>
+<h1>DRE mês a mês <span class="muted" style="font-size:.9rem">por competência · inclui o que ainda não foi pago</span></h1>
+<form method="get" style="margin:.4rem 0">
+  <label>De <input type="month" name="start" value="{{ ini.isoformat()[:7] }}"></label>
+  <label>até <input type="month" name="end" value="{{ fim.isoformat()[:7] }}"></label> <button>Ver</button>
+</form>
+
+<div class="card tiles">
+  <div class="tile"><div class="l">Receitas no período</div><div class="v">{{ tot_rec | brl }}</div></div>
+  <div class="tile"><div class="l">Despesas no período</div><div class="v">{{ tot_desp | brl }}</div></div>
+  <div class="tile"><div class="l">Resultado</div><div class="v {{ 'neg' if tot_rec < tot_desp }}">{{ (tot_rec - tot_desp) | brl }}</div></div>
+  <div class="tile"><div class="l">Despesa média por mês</div><div class="v">{{ (tot_desp // n) | brl }}</div></div>
+</div>
+
+<div class="card"><h2>Receitas × despesas</h2>
+  {{ bar_chart(m.months, rec_desp, label="Receitas e despesas por mês") }}{{ legend(rec_desp) }}
+</div>
+{% if empilhado %}
+<div class="card"><h2>Despesas por grupo</h2>
+  {{ bar_chart(m.months, empilhado, stacked=True, label="Despesas por grupo, por mês") }}{{ legend(empilhado) }}
+</div>
+{% endif %}
+
+<div class="card scroll">
+<div style="margin-bottom:.4rem"><button type="button" class="lnk" onclick="dreTudo(true)">Expandir tudo</button>
+  <button type="button" class="lnk" onclick="dreTudo(false)">Recolher</button>
+  <span class="muted">· clique no grupo para ver as contas · valores em R$</span></div>
+<table class="mensal" id="dre">
+  <thead><tr><th class="name">Conta</th>{% for ym in m.months %}<th class="num">{{ ym | mes_curto }}</th>{% endfor %}
+    <th class="num">Total</th><th class="num">Média</th><th>Tendência</th></tr></thead>
   <tbody>
-  <tr class="group"><td>Receitas</td><td class="num">{{ r.income_cents | brl }}</td></tr>
-  {% for l in r.lines if l.type == 'income' %}<tr><td>{{ l.code }} {{ l.name }}</td><td class="num">{{ l.amount_cents | brl }}</td></tr>{% endfor %}
-  <tr class="group"><td>Despesas</td><td class="num">{{ r.expense_cents | brl }}</td></tr>
-  {% for l in r.lines if l.type == 'expense' %}<tr><td>{{ l.code }} {{ l.name }}</td><td class="num">{{ l.amount_cents | brl }}</td></tr>{% endfor %}
-  <tr class="group"><td>Resultado</td><td class="num {{ 'neg' if r.result_cents < 0 }}">{{ r.result_cents | brl }}</td></tr>
+  {% for r in m.rows %}
+    <tr class="l{{ r.depth }}{{ ' hide' if r.depth >= 2 }}" data-code="{{ r.code }}" data-depth="{{ r.depth }}"{% if r.is_group and r.depth == 1 %} onclick="dreToggle(this)"{% endif %}>
+      <td class="name">{% if r.is_group and r.depth == 1 %}<span class="car">▸</span>{% endif %}{{ r.name }}</td>
+      {% for c in r.cents %}<td class="num {{ 'neg' if c < 0 }}">{{ c | num if c else '–' }}</td>{% endfor %}
+      <td class="num">{{ r.total_cents | num }}</td><td class="num">{{ (r.total_cents // n) | num }}</td>
+      <td>{{ sparkline(r.cents) if r.depth >= 1 }}</td>
+    </tr>
+  {% endfor %}
+    <tr class="res"><td class="name">Resultado</td>
+      {% for c in resultado %}<td class="num {{ 'neg' if c < 0 }}">{{ c | num }}</td>{% endfor %}
+      <td class="num {{ 'neg' if tot_rec < tot_desp }}">{{ (tot_rec - tot_desp) | num }}</td>
+      <td class="num">{{ ((tot_rec - tot_desp) // n) | num }}</td><td>{{ sparkline(resultado) }}</td></tr>
   </tbody>
-</table>
+</table></div>
+<script>
+function dreFilhas(tr){const c=tr.dataset.code+'.';return [...document.querySelectorAll('#dre tbody tr')].filter(x=>x.dataset.code&&x.dataset.code.startsWith(c));}
+function dreToggle(tr){const abrir=tr.querySelector('.car').textContent==='▸';tr.querySelector('.car').textContent=abrir?'▾':'▸';dreFilhas(tr).forEach(x=>x.classList.toggle('hide',!abrir));}
+function dreTudo(abrir){document.querySelectorAll('#dre tr.l1').forEach(tr=>{const car=tr.querySelector('.car');if(car){car.textContent=abrir?'▾':'▸';dreFilhas(tr).forEach(x=>x.classList.toggle('hide',!abrir));}});}
+</script>
 {% endblock %}

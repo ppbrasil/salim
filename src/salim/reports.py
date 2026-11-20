@@ -63,6 +63,17 @@ def dre(session: Session, start: date, end: date | None = None) -> Dre:
                expense_cents=sum(l.amount_cents for l in lines if l.type == "expense"))
 
 
+def first_activity_month(session: Session) -> date | None:
+    """Primeiro mês de competência com lançamento em receita ou despesa."""
+    v = session.execute(text("SELECT MIN(month) FROM v_dre")).scalar_one()
+    return month_start(_as_date(v)) if v else None
+
+
+def last_activity_month(session: Session) -> date | None:
+    v = session.execute(text("SELECT MAX(month) FROM v_dre")).scalar_one()
+    return month_start(_as_date(v)) if v else None
+
+
 # ------------------------------------------------------------------ DRE mês a mês
 @dataclass
 class DreRow:

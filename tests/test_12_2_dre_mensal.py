@@ -66,3 +66,24 @@ def test_api_dre_mensal(client):
     r = client.get("/reports/dre-monthly", params={"start": "2026-08-01", "end": "2026-09-30"}).json()
     assert r["months"] == ["2026-08", "2026-09"] and r["result"] == [-60000, 425000]
     assert {x["code"]: x["cents"] for x in r["rows"]}["5.02"] == [60000, 55000]
+
+
+def test_tela_dre_mensal_tem_colunas_grupos_graficos_e_resultado(client):
+    _dados(client)
+    html = client.get("/ui/reports/dre", params={"start": "2026-08", "end": "2026-10"}).text
+    assert all(m in html for m in ("ago/26", "set/26", "out/26"))              # uma coluna por mês
+    assert 'data-code="5.02"' in html and 'data-code="5.02.01"' in html         # grupo e conta
+    assert "Despesas por grupo" in html and "<svg" in html and "<title>set/26 · Alimentação" in html
+    assert "Resultado" in html and "4.250,00" in html                        # resultado de setembro
+
+
+def test_tela_dre_sem_periodo_vai_do_primeiro_movimento_ate_o_mes_corrente(client):
+    _dados(client)
+    html = client.get("/ui/reports/dre", params={"today": "2026-10-20"}).text
+    assert "ago/26" in html and "set/26" in html and "jul/26" not in html
+    # mês corrente ainda sem movimento não vira coluna vazia
+    assert "nov/26" not in client.get("/ui/reports/dre", params={"today": "2026-11-20"}).text
+
+
+def test_tela_dre_vazia_nao_quebra(client):
+    assert client.get("/ui/reports/dre").status_code == 200
