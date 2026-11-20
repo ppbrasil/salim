@@ -5,7 +5,7 @@ from datetime import date
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from salim.ledger import month_start
+from salim.ledger import account_tree, month_start
 from salim.obligations import _shift
 
 
@@ -61,6 +61,58 @@ def dre(session: Session, start: date, end: date | None = None) -> Dre:
     return Dre(start, end, lines,
                income_cents=sum(l.amount_cents for l in lines if l.type == "income"),
                expense_cents=sum(l.amount_cents for l in lines if l.type == "expense"))
+
+
+# ------------------------------------------------------------------ DRE mês a mês
+@dataclass
+class DreRow:
+    code: str
+    name: str
+    type: str
+    depth: int
+    is_group: bool
+    cents: list[int]          # um valor por mês, na ordem de DreMonthly.months
+
+    @property
+    def total_cents(self) -> int:
+        return sum(self.cents)
+
+
+@dataclass
+class DreMonthly:
+    months: list[str]         # 'AAAA-MM'
+    rows: list[DreRow]        # árvore (receitas e despesas) em ordem de código; grupos somam os filhos
+    income: list[int]
+    expense: list[int]
+
+    @property
+    def result(self) -> list[int]:
+        return [i - e for i, e in zip(self.income, self.expense)]
+
+
+def dre_monthly(session: Session, start: date, end: date) -> DreMonthly:
+    """DRE por competência com um mês por coluna. Só entram contas (e grupos) com movimento no período."""
+    meses = [_ym(m) for m in _months(month_start(start), month_start(end))]
+    col = {ym: i for i, ym in enumerate(meses)}
+    dados: dict[str, list[int]] = {}
+    for mes, code, cents in session.execute(text("""
+            SELECT d.month, d.account_code, CAST(d.amount_cents AS BIGINT) FROM v_dre d
+            WHERE d.month BETWEEN :s AND :e"""), {"s": month_start(start).isoformat(),
+                                                  "e": month_start(end).isoformat()}).all():
+        ym = _ym(_as_date(mes))
+        if ym in col:
+            dados.setdefault(code, [0] * len(meses))[col[ym]] += cents
+    arvore = [(d, c) for d, c in account_tree(session) if c.type.value in ("income", "expense")]
+    soma: dict[int, list[int]] = {c.id: list(dados.get(c.code, [0] * len(meses))) for _, c in arvore}
+    por_id = {c.id: c for _, c in arvore}
+    for _, c in reversed(arvore):          # filhos vêm depois do pai: somar de baixo para cima
+        if c.parent_id in soma:
+            soma[c.parent_id] = [a + b for a, b in zip(soma[c.parent_id], soma[c.id])]
+    rows = [DreRow(c.code, c.name, c.type.value, d, c.is_group, soma[c.id])
+            for d, c in arvore if any(soma[c.id])]
+    topo = {c.type.value: soma[c.id] for _, c in arvore if c.parent_id is None or c.parent_id not in por_id}
+    zero = [0] * len(meses)
+    return DreMonthly(meses, rows, topo.get("income", zero), topo.get("expense", zero))
 
 
 # ------------------------------------------------------------------ caixa executado

@@ -449,6 +449,12 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
         return {"start": r.start, "end": r.end, "income_cents": r.income_cents, "expense_cents": r.expense_cents,
                 "result_cents": r.result_cents, "lines": [vars(l) for l in r.lines]}
 
+    @app.get("/reports/dre-monthly")
+    def api_dre_monthly(start: date, end: date, session=Depends(get_session)):
+        m = reports.dre_monthly(session, start, end)
+        return {"months": m.months, "income": m.income, "expense": m.expense, "result": m.result,
+                "rows": [{**vars(r), "total_cents": r.total_cents} for r in m.rows]}
+
     @app.get("/reports/cash")
     def api_cash(start: date, end: date, session=Depends(get_session)):
         return [{**vars(m), "net_cents": m.net_cents} for m in reports.cash_executed(session, start, end)]
