@@ -8,5 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from salim.app import create_app  # noqa: E402
+from salim.vercel_path import RestaurarCaminhoOriginal  # noqa: E402
 
-app = create_app(seed=False)
+# a Vercel entrega /api/index; o caminho real vem em ?__p= (ver vercel.json)
+app = RestaurarCaminhoOriginal(create_app(seed=False))

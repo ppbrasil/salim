@@ -1,7 +1,17 @@
 {
-  "regions": ["gru1"],
+  "regions": [
+    "gru1"
+  ],
   "functions": {
-    "api/index.py": { "includeFiles": "src/**", "maxDuration": 30 }
+    "api/index.py": {
+      "includeFiles": "src/**",
+      "maxDuration": 30
+    }
   },
-  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
+  "rewrites": [
+    {
+      "source": "/:path*",
+      "destination": "/api/index?__p=:path*"
+    }
+  ]
 }
