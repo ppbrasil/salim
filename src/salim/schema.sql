@@ -17,6 +17,8 @@ CREATE TABLE accounts (
   closing_day         INTEGER CHECK (closing_day BETWEEN 1 AND 31),  -- só cartão
   due_day             INTEGER CHECK (due_day BETWEEN 1 AND 31),      -- só cartão
   archived            INTEGER NOT NULL DEFAULT 0,
+  card_brand          TEXT,                                          -- só cartão: Visa, Mastercard...
+  card_last4          TEXT CHECK (card_last4 IS NULL OR length(card_last4) = 4),  -- só cartão: final do número
   CHECK (NOT (is_group AND (is_cash OR tracks_obligations)))
 );
 

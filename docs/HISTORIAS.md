@@ -85,6 +85,16 @@ Carga real (20/11/2026): V13–V18 refeitas por itens (75 linhas "Incluir" da pl
 
 Pendente de E12: tela para criar pedido/itens; meses marcados como "fechado/incompleto" (aguardando decisão); editar plano de contas pela tela.
 
+## E13 Cartões de crédito ✅ (20/11/2026)
+Cada cartão é uma conta de passivo sob `2.01`, como uma conta corrente que sempre tem uma fatura aberta. Dados: nome, bandeira, final, dia de fechamento, dia de vencimento (migração `0004_cartoes.sql`).
+| ID | História | Teste de aceite | Arquivos |
+|----|----------|-----------------|----------|
+| 13.1 | Cadastro de cartão: `POST/GET/PATCH /cards`, código `2.01.NN` automático; mudar fechamento/vencimento vale só para faturas novas | Final com 4 dígitos, bandeira conhecida, dias 1–31; melhor dia de compra = dia seguinte ao fechamento | B cards.py, ledger.py, models.py, schema.sql, migração 0004 |
+| 13.2 | Resumo por cartão: fatura aberta sempre (virtual se ainda sem compra), fechadas a pagar, parcelas em faturas futuras, **devido (outstanding)** | Devido = soma das faturas = saldo da conta do cartão; depois do fechamento a aberta passa ao próximo ciclo; fatura quitada sai da lista | B cards.py |
+| 13.3 | Telas Cartões (lista com devido, fatura aberta, fechadas, futuras + cadastro) e detalhe do cartão com as faturas e seus itens | Erro de cadastro aparece na tela; menu "Cartões" | B app.py, F cards.html, card.html |
+
+Próximo (conciliação): conferir o devido de cada cartão com o extrato/fatura do cartão e registrar a diferença.
+
 ## E10 Migração para Vercel + Neon ⬜ (plano em `docs/MIGRACAO_VERCEL_NEON.md`)
 M0 ✅ Postgres de teste (compose + CI) · M1 ✅ `schema_pg.sql` + testes parametrizados (197 verdes no PG, 52 na lista da M2) · M2 ✅ SQL cru e casts (PG 249 verdes, CI bloqueante nos dois bancos) · M3 ✅ migrações fora da partida (`python -m salim.migrate [--seed]`, lock consultivo, 1 transação por arquivo; PG 256 verdes) · M4 ✅ estado do bot em tabelas `bot_pending`/`bot_seen` (PG 264 verdes) · M5 ✅ trava de login em tabela `login_throttle` (PG 268 verdes) · M6 ✅ fuso America/Sao_Paulo (`salim.clock.today`, PG 274 verdes) · M7 ✅ engine serverless (NullPool, SSL, retry de cold start, `DATABASE_URL`; falta só a conexão com o Neon real) · M8 🟡 deploy Vercel + webhook Telegram (código pronto: `api/index.py`, `vercel.json`; falta Neon + variáveis + deploy + `setWebhook`) · M9 backup `pg_dump` no GitHub Actions + restauração · M10 corte (remove SQLite)
 

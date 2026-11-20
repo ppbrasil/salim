@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ c.name }} · Salim{% endblock %}
+{% block content %}
+<p><a href="/ui/cards">← Cartões</a></p>
+<h1>{{ c.name }} <span class="muted" style="font-size:.9rem">{{ c.brand or '' }}{% if c.last4 %} · final {{ c.last4 }}{% endif %}</span></h1>
+<p class="muted">Fecha dia {{ c.closing_day }} · vence dia {{ c.due_day }} · melhor dia de compra: dia {{ c.best_purchase_day }}</p>
+<div class="card tiles">
+  <div class="tile"><div class="l">Devido (outstanding)</div><div class="v">{{ c.outstanding_cents | brl }}</div></div>
+  <div class="tile"><div class="l">Fatura aberta</div><div class="v">{{ c.open_cents | brl }}</div></div>
+  <div class="tile"><div class="l">Fechadas a pagar</div><div class="v">{{ c.closed_cents | brl }}</div></div>
+  <div class="tile"><div class="l">Faturas futuras</div><div class="v">{{ c.future_cents | brl }}</div></div>
+</div>
+<table>
+  <thead><tr><th>Fatura</th><th>Fecha</th><th>Vence</th><th>Situação</th><th class="num">Valor</th></tr></thead>
+  <tbody>
+  {% for f in c.invoices %}
+    <tr>
+      <td>{{ f.reference }}
+        {% if f.id %}{% with lista = itens[f.id] %}{% include "_itens_titulo.html" %}{% endwith %}{% else %}<br><span class="muted">sem compras ainda</span>{% endif %}</td>
+      <td>{{ f.closing_date.isoformat() | data }}</td>
+      <td>{{ f.due_date.isoformat() | data }}</td>
+      <td class="{{ 'atrasada' if f.status == 'fechada' and f.days_late else '' }}">{{ f.status }}{% if f.days_late and f.status == 'fechada' %} · {{ f.days_late }} dias de atraso{% endif %}
+        {% if f.status == 'fechada' and f.balance_cents > 0 %}· <a href="/ui/payables">pagar</a>{% endif %}</td>
+      <td class="num">{{ f.balance_cents | brl }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

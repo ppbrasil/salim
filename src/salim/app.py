@@ -1,4 +1,5 @@
 import hashlib
+from dataclasses import asdict
 import hmac
 import logging
 import os
@@ -17,7 +18,7 @@ from salim.money import brl, parse_brl
 from salim.auth import AuthConfig, LoginLimiter, make_session, read_session, verify_password
 from salim.channels import WhatsAppChannel, WhatsAppSender
 from salim.telegram import Bot, HttpSender
-from salim import bankimport as imp, budget as bud, ledger, obligations as obl, reports, viz
+from salim import cards, bankimport as imp, budget as bud, ledger, obligations as obl, reports, viz
 from salim.chart import seed_chart
 from salim.clock import today as clock_today
 from salim.db import make_session_factory
@@ -52,6 +53,22 @@ class AccountIn(BaseModel):
     is_cash: bool = False
     tracks_obligations: bool = False
     is_temporary: bool = False
+    closing_day: int | None = None
+    due_day: int | None = None
+
+
+class CardIn(BaseModel):
+    name: str
+    closing_day: int
+    due_day: int
+    brand: str | None = None
+    last4: str | None = None
+
+
+class CardPatch(BaseModel):
+    name: str | None = None
+    brand: str | None = None
+    last4: str | None = None
     closing_day: int | None = None
     due_day: int | None = None
 
@@ -396,6 +413,33 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
                 invoices=None if body.invoices is None else [(i.closing_date, i.due_date) for i in body.invoices])
             return [obl.get_obligation(session, f.id, clock_today()) for f in faturas]
 
+    @app.post("/cards", status_code=201)
+    def new_card(body: CardIn, session=Depends(get_session)):
+        with business_errors():
+            c = cards.create_card(session, **body.model_dump())
+            return asdict(cards.card_summary(session, c.code, clock_today()))
+
+    @app.get("/cards")
+    def list_cards(today: date | None = None, session=Depends(get_session)):
+        return [asdict(c) for c in cards.list_cards(session, today or clock_today())]
+
+    def _card_or_404(session, code, today):
+        try:
+            return cards.card_summary(session, code, today or clock_today())
+        except (ledger.AccountNotFoundError, ledger.InvalidAccountError):
+            raise HTTPException(404, f"cartão inexistente: {code}")
+
+    @app.get("/cards/{code}")
+    def get_card(code: str, today: date | None = None, session=Depends(get_session)):
+        return asdict(_card_or_404(session, code, today))
+
+    @app.patch("/cards/{code}")
+    def patch_card(code: str, body: CardPatch, session=Depends(get_session)):
+        _card_or_404(session, code, None)
+        with business_errors():
+            cards.update_card(session, code, **body.model_dump(exclude_unset=True))
+        return asdict(cards.card_summary(session, code, clock_today()))
+
     @app.post("/obligations/settle", status_code=201)
     def settle(body: SettleIn, session=Depends(get_session)):
         with business_errors():
@@ -535,6 +579,36 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
                "prox7": sum(v.balance_cents for v in aberto if v.status == "a_vencer" and (v.due_date - hoje).days <= 7)}
         pagina = "payables.html" if direction == "pagar" else "receivables.html"
         return templates.TemplateResponse(request, pagina, ctx, status_code=status)
+
+    def _cards_page(request, session, hoje, erro=None, status=200, form=None):
+        return templates.TemplateResponse(request, "cards.html", {
+            "cartoes": cards.list_cards(session, hoje), "hoje": hoje, "erro": erro, "form": form or {},
+            "bandeiras": sorted(set(cards.BANDEIRAS.values()))}, status_code=status)
+
+    @app.get("/ui/cards")
+    def ui_cards(request: Request, today: date | None = None, session=Depends(get_session)):
+        return _cards_page(request, session, today or clock_today())
+
+    @app.post("/ui/cards")
+    async def ui_new_card(request: Request, session=Depends(get_session)):
+        f = dict(await request.form())
+        try:
+            fecha, vence = int(f.get("closing_day", "")), int(f.get("due_day", ""))
+            with business_errors():
+                cards.create_card(session, name=f.get("name", ""), brand=f.get("brand") or None,
+                                  last4=(f.get("last4") or "").strip() or None, closing_day=fecha, due_day=vence)
+        except ValueError:
+            return _cards_page(request, session, clock_today(), "fechamento e vencimento devem ser números (dia do mês)", 422, f)
+        except HTTPException as e:
+            return _cards_page(request, session, clock_today(), e.detail, 422, f)
+        return RedirectResponse("/ui/cards", status_code=303)
+
+    @app.get("/ui/cards/{code}")
+    def ui_card(code: str, request: Request, today: date | None = None, session=Depends(get_session)):
+        hoje = today or clock_today()
+        c = _card_or_404(session, code, hoje)
+        itens = obl.obligation_items(session, [i.id for i in c.invoices if i.id])
+        return templates.TemplateResponse(request, "card.html", {"c": c, "itens": itens, "hoje": hoje})
 
     @app.get("/ui/payables")
     def ui_payables(request: Request, today: date | None = None, session=Depends(get_session)):

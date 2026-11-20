@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Cartões · Salim{% endblock %}
+{% block content %}
+<h1>Cartões <span class="muted" style="font-size:.9rem">posição em {{ hoje.isoformat() | data }}</span></h1>
+{% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+<div class="card tiles">
+  <div class="tile"><div class="l">Devido em todos os cartões</div><div class="v">{{ cartoes | sum(attribute='outstanding_cents') | brl }}</div></div>
+  <div class="tile"><div class="l">Faturas fechadas a pagar</div><div class="v">{{ cartoes | sum(attribute='closed_cents') | brl }}</div></div>
+  <div class="tile"><div class="l">Faturas abertas</div><div class="v">{{ cartoes | sum(attribute='open_cents') | brl }}</div></div>
+</div>
+
+{% for c in cartoes %}
+<div class="card">
+  <h2><a href="/ui/cards/{{ c.code }}">{{ c.name }}</a>
+    <span class="muted" style="font-size:.85rem">{{ c.brand or '' }}{% if c.last4 %} · final {{ c.last4 }}{% endif %}</span></h2>
+  <p class="muted" style="margin:.2rem 0 .6rem">Fecha dia {{ c.closing_day }} · vence dia {{ c.due_day }} · melhor dia de compra: dia {{ c.best_purchase_day }}</p>
+  <div class="tiles">
+    <div class="tile"><div class="l">Devido (outstanding)</div><div class="v">{{ c.outstanding_cents | brl }}</div></div>
+    <div class="tile"><div class="l">Fatura aberta · fecha {{ c.open_closing.isoformat() | data }} · vence {{ c.open_due.isoformat() | data }}</div>
+      <div class="v">{{ c.open_cents | brl }}</div></div>
+    <div class="tile"><div class="l">Fechadas a pagar</div><div class="v {{ 'atrasada' if c.closed_cents }}">{{ c.closed_cents | brl }}</div></div>
+    <div class="tile"><div class="l">Parcelas em faturas futuras</div><div class="v">{{ c.future_cents | brl }}</div></div>
+  </div>
+</div>
+{% else %}
+<p class="muted">Nenhum cartão cadastrado.</p>
+{% endfor %}
+
+<div class="card"><h2>Novo cartão</h2>
+  <form method="post" action="/ui/cards" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:end">
+    <label>Nome <input name="name" required value="{{ form.get('name', '') }}" placeholder="Santander Unique"></label>
+    <label>Bandeira <select name="brand"><option value="">—</option>
+      {% for b in bandeiras %}<option {{ 'selected' if form.get('brand') == b }}>{{ b }}</option>{% endfor %}</select></label>
+    <label>Final <input name="last4" inputmode="numeric" maxlength="4" size="4" value="{{ form.get('last4', '') }}" placeholder="0103"></label>
+    <label>Fecha dia <input name="closing_day" type="number" min="1" max="31" required style="width:4.5rem" value="{{ form.get('closing_day', '') }}"></label>
+    <label>Vence dia <input name="due_day" type="number" min="1" max="31" required style="width:4.5rem" value="{{ form.get('due_day', '') }}"></label>
+    <button>Cadastrar</button>
+  </form>
+  <p class="muted">O melhor dia de compra é o dia seguinte ao fechamento.</p>
+</div>
+{% endblock %}

@@ -30,6 +30,8 @@ class Account(Base):
     closing_day: Mapped[int | None] = mapped_column(nullable=True)
     due_day: Mapped[int | None] = mapped_column(nullable=True)
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    card_brand: Mapped[str | None] = mapped_column(String, nullable=True)      # só cartão
+    card_last4: Mapped[str | None] = mapped_column(String, nullable=True)      # só cartão: final do número
 
 
 class Transaction(Base):

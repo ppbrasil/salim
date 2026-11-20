@@ -50,6 +50,8 @@ def create_account(
     is_temporary: bool = False,
     closing_day: int | None = None,
     due_day: int | None = None,
+    card_brand: str | None = None,
+    card_last4: str | None = None,
 ) -> Account:
     if is_group and (is_cash or tracks_obligations):
         raise InvalidAccountError("conta-grupo não pode ser caixa nem controlar títulos")
@@ -60,7 +62,7 @@ def create_account(
     conta = Account(
         code=code, name=name, type=type, parent_id=parent_id, is_group=is_group, is_cash=is_cash,
         tracks_obligations=tracks_obligations, is_temporary=is_temporary,
-        closing_day=closing_day, due_day=due_day,
+        closing_day=closing_day, due_day=due_day, card_brand=card_brand, card_last4=card_last4,
     )
     session.add(conta)
     try:
