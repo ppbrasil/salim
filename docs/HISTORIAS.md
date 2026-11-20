@@ -69,6 +69,16 @@ Decisões: gestão por **competência (mês)**; compra parcelada entra inteira n
 ## E9 Canal comum e WhatsApp ✅ (adaptador testado com payloads simulados)
 9.1 interface de canal · 9.2 adaptador WhatsApp com os mesmos testes do Telegram
 
+## E12 Visões gerenciais ✅ (20/11/2026)
+| ID | História | Teste de aceite | Arquivos |
+|----|----------|-----------------|----------|
+| 12.1 | Renomear e mover conta entre grupos (`PATCH /accounts/{code}`) | Histórico acompanha; ciclo, tipo diferente e código repetido barrados | B ledger.py, app.py |
+| 12.2 | DRE mês a mês: uma coluna por mês, grupos somam filhos, expandir/recolher, tendência por linha, gráficos (receitas × despesas; despesas por grupo) | Competência manda; só linhas com movimento; `GET /reports/dre-monthly` | B reports.py, viz.py, F dre.html |
+| 12.3 | Caixa mês a mês: entrou, saiu, líquido, saldo, previsto pelos títulos, desvio vs orçado (receitas − despesas do orçamento) | Meses futuros só com projeção; grupo e filho com meta não contam em dobro; `GET /reports/cash-monthly` | B reports.py, budget.py, F cash.html |
+| 12.4 | A pagar e A receber em telas próprias, com Pagar/Receber (total ou parcial) pela tela; itens de cada título; pedido de reembolso por evento (`POST /reimbursements`, `/reimbursements/{id}/items`) abatendo a despesa na própria categoria | Pagar baixa e sai do caixa; receber entra; erro aparece na tela | B obligations.py, app.py, F payables/receivables.html |
+
+Pendente de E12: reconstruir V13–V18 com os itens da planilha (hoje cada viagem é um valor único em `5.17.01`); tela para criar pedido/itens; meses marcados como "fechado/incompleto"; editar plano de contas pela tela.
+
 ## E10 Migração para Vercel + Neon ⬜ (plano em `docs/MIGRACAO_VERCEL_NEON.md`)
 M0 ✅ Postgres de teste (compose + CI) · M1 ✅ `schema_pg.sql` + testes parametrizados (197 verdes no PG, 52 na lista da M2) · M2 ✅ SQL cru e casts (PG 249 verdes, CI bloqueante nos dois bancos) · M3 ✅ migrações fora da partida (`python -m salim.migrate [--seed]`, lock consultivo, 1 transação por arquivo; PG 256 verdes) · M4 ✅ estado do bot em tabelas `bot_pending`/`bot_seen` (PG 264 verdes) · M5 ✅ trava de login em tabela `login_throttle` (PG 268 verdes) · M6 ✅ fuso America/Sao_Paulo (`salim.clock.today`, PG 274 verdes) · M7 ✅ engine serverless (NullPool, SSL, retry de cold start, `DATABASE_URL`; falta só a conexão com o Neon real) · M8 🟡 deploy Vercel + webhook Telegram (código pronto: `api/index.py`, `vercel.json`; falta Neon + variáveis + deploy + `setWebhook`) · M9 backup `pg_dump` no GitHub Actions + restauração · M10 corte (remove SQLite)
 
