@@ -53,6 +53,12 @@ class AccountIn(BaseModel):
     due_day: int | None = None
 
 
+class AccountPatch(BaseModel):
+    name: str | None = None
+    new_code: str | None = None
+    parent_code: str | None = None
+
+
 class BillIn(BaseModel):
     event_date: date
     description: str
@@ -341,6 +347,16 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
     def create_account(body: AccountIn, session=Depends(get_session)):
         with business_errors():
             c = ledger.create_account(session, **body.model_dump())
+        return {"id": c.id, "code": c.code, "name": c.name}
+
+    @app.patch("/accounts/{code}")
+    def patch_account(code: str, body: AccountPatch, session=Depends(get_session)):
+        try:
+            ledger.get_account(session, code)
+        except ledger.AccountNotFoundError:
+            raise HTTPException(404, f"conta inexistente: {code}")
+        with business_errors():
+            c = ledger.update_account(session, code, **body.model_dump())
         return {"id": c.id, "code": c.code, "name": c.name}
 
     @app.get("/obligations")

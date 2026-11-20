@@ -73,6 +73,37 @@ def create_account(
     return conta
 
 
+def update_account(
+    session: Session, code: str, *, name: str | None = None, new_code: str | None = None,
+    parent_code: str | None = None,
+) -> Account:
+    """Renomeia, troca o código e/ou muda de grupo. As partidas apontam para o id: o histórico acompanha."""
+    conta = get_account(session, code)
+    if name is not None:
+        if not name.strip():
+            raise InvalidAccountError("nome não pode ser vazio")
+        conta.name = name.strip()
+    if parent_code is not None:
+        pai = get_account(session, parent_code)
+        if not pai.is_group:
+            raise InvalidAccountError(f"{parent_code} não é conta-grupo")
+        if pai.type != conta.type:
+            raise InvalidAccountError("o grupo precisa ser do mesmo tipo da conta")
+        if pai.id == conta.id or pai.id in _subtree_ids(session, conta):
+            raise InvalidAccountError("uma conta não pode virar filha de si mesma ou de um descendente")
+        conta.parent_id = pai.id
+    if new_code is not None and new_code != conta.code:
+        conta.code = new_code
+    try:
+        session.commit()
+    except IntegrityError as e:
+        session.rollback()
+        if "UNIQUE" in str(e.orig).upper():
+            raise DuplicateAccountError(new_code)
+        raise InvalidAccountError(str(e.orig))
+    return conta
+
+
 def get_account(session: Session, code: str) -> Account:
     conta = session.execute(select(Account).where(Account.code == code)).scalar_one_or_none()
     if conta is None:
