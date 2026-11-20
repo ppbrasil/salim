@@ -33,7 +33,7 @@ templates.env.filters["data"] = lambda iso: f"{iso[8:10]}/{iso[5:7]}/{iso[:4]}"
 templates.env.filters["mes"] = lambda iso: f"{MESES[int(iso[5:7]) - 1]}/{iso[:4]}"
 templates.env.filters["mes_curto"] = viz.mes_curto
 templates.env.filters["num"] = lambda c: brl(c).replace("R$ ", "")
-templates.env.globals.update(bar_chart=viz.bar_chart, legend=viz.legend, sparkline=viz.sparkline)
+templates.env.globals.update(line_chart=viz.line_chart, bar_chart=viz.bar_chart, legend=viz.legend, sparkline=viz.sparkline)
 
 
 class EntryIn(BaseModel):
@@ -555,12 +555,37 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
             "resultado": m.result, "tot_rec": sum(m.income), "tot_desp": sum(m.expense)})
 
     @app.get("/ui/reports/cash")
-    def ui_cash(request: Request, today: date | None = None, session=Depends(get_session)):
+    def ui_cash(request: Request, start: str | None = None, end: str | None = None, today: date | None = None,
+                session=Depends(get_session)):
         hoje = today or clock_today()
-        inicio = ledger.month_start(hoje)
-        passado = reports.cash_executed(session, date(inicio.year - (inicio.month <= 5), (inicio.month - 6) % 12 + 1, 1), inicio)
+        atual = ledger.month_start(hoje)
+        ini, fim = _mes(start), _mes(end) or atual
+        if ini is None:
+            primeiro = reports.first_cash_month(session) or atual
+            y, m = reports._shift(fim.year, fim.month, -11)
+            ini = max(primeiro, date(y, m, 1))
+        if fim < ini:
+            ini, fim = fim, ini
+        futuros = 3 if (not end or fim >= atual) else 0
+        c = reports.cash_monthly(session, ini, fim, hoje, future_months=futuros)
+        meses = [r.month for r in c.months]
+        primeiro_futuro = next((i for i, r in enumerate(c.months) if r.is_future), None)
+        corrente = next((r for r in c.months if r.is_current), None)
+        reais = [r for r in c.months if not r.is_future]
         return templates.TemplateResponse(request, "cash.html", {
-            "executado": passado, "projetado": reports.cash_future(session, hoje, 6), "hoje": hoje})
+            "c": c, "n": len(meses), "ini": ini, "fim": fim, "hoje": hoje,
+            "reais_meses": [r.month for r in reais],
+            "entradas_saidas": [("Entradas", 1, [r.inflow_cents for r in reais]), ("Saídas", 2, [r.outflow_cents for r in reais])],
+            "saldos": [r.closing_cents for r in c.months], "primeiro_futuro": primeiro_futuro,
+            "saldo_atual": (corrente or (reais[-1] if reais else None)),
+            "tot_in": sum(r.inflow_cents for r in reais), "tot_out": sum(r.outflow_cents for r in reais),
+            "tem_orcamento": any(r.budget_net_cents is not None for r in c.months)})
+
+    @app.get("/reports/cash-monthly")
+    def api_cash_monthly(start: date, end: date, today: date | None = None, future_months: int = 3,
+                         session=Depends(get_session)):
+        c = reports.cash_monthly(session, start, end, today or clock_today(), future_months)
+        return [{**vars(r), "net_cents": r.net_cents} for r in c.months]
 
     def _budget_page(request, session, month, hoje, form=None, erro=None, status=200):
         contas = [c for _, c in ledger.account_tree(session) if c.type in (AccountType.EXPENSE, AccountType.INCOME)]

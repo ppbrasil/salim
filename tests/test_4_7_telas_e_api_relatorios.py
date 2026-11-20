@@ -47,7 +47,7 @@ def test_tela_dre(client):
 def test_tela_caixa_mostra_executado_e_projetado(client):
     _dados(client)
     html = client.get("/ui/reports/cash", params={"today": "2026-08-12"}).text
-    assert "Executado" in html and "Projetado" in html and "R$ 4.400,00" in html
+    assert "Entradas" in html and "projeção" in html and "R$ 4.400,00" in html
 
 
 def test_tela_orcamento_com_formulario_e_alerta(client):

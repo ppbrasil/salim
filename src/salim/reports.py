@@ -5,6 +5,7 @@ from datetime import date
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from salim import budget as _budget
 from salim.ledger import account_tree, month_start
 from salim.obligations import _shift
 
@@ -204,3 +205,71 @@ def cash_future(session: Session, today: date, months: int = 6) -> list[FutureMo
         saldo += i - o
         out.append(FutureMonth(ym, i, o, late, saldo))
     return out
+
+
+# ------------------------------------------------------------------ caixa mês a mês (executado + previsto)
+@dataclass
+class CashMonthRow:
+    month: str
+    inflow_cents: int          # executado (data do evento)
+    outflow_cents: int
+    expected_in_cents: int     # a receber em aberto previsto para o mês (títulos)
+    expected_out_cents: int    # a pagar em aberto previsto (inclui o já vencido no mês corrente)
+    closing_cents: int         # saldo ao fim: realizado até hoje; projetado nos meses futuros
+    is_future: bool
+    is_current: bool
+    budget_net_cents: int | None
+    deviation_cents: int | None
+
+    @property
+    def net_cents(self) -> int:
+        return self.inflow_cents - self.outflow_cents
+
+
+@dataclass
+class CashMonthly:
+    months: list[CashMonthRow]
+
+
+def first_cash_month(session: Session) -> date | None:
+    v = session.execute(text("""
+        SELECT MIN(t.event_date) FROM postings p JOIN accounts a ON a.id = p.account_id AND a.is_cash
+        JOIN transactions t ON t.id = p.transaction_id""")).scalar_one()
+    return month_start(_as_date(v)) if v else None
+
+
+def cash_monthly(session: Session, start: date, end: date, today: date, future_months: int = 3) -> CashMonthly:
+    """Uma linha por mês: o que entrou e saiu de fato, o saldo, o que os títulos preveem e o desvio contra o orçado.
+
+    Meses depois de `end` (até `future_months`) entram só com a projeção dos títulos em aberto. O desvio compara o
+    líquido do mês (no mês corrente: executado + previsto) com receitas − despesas do orçamento.
+    """
+    start, end, atual = month_start(start), month_start(end), month_start(today)
+    ultimo = _shift_month(end, future_months)
+    meses = _months(start, ultimo)
+    executado = {m.month: m for m in cash_executed(session, start, end)}
+    abertura = session.execute(text("""
+        SELECT CAST(COALESCE(SUM(p.amount_cents), 0) AS BIGINT) FROM postings p
+        JOIN accounts a ON a.id = p.account_id AND a.is_cash
+        JOIN transactions t ON t.id = p.transaction_id WHERE t.event_date < :s"""),
+        {"s": start.isoformat()}).scalar_one()
+    previsto, proj_fecha = {}, {}
+    if ultimo >= atual:
+        n = (ultimo.year - atual.year) * 12 + ultimo.month - atual.month + 1
+        for f in cash_future(session, today, n):
+            previsto[f.month] = (f.inflow_cents, f.outflow_cents)
+            proj_fecha[f.month] = f.closing_cents
+    linhas, saldo = [], abertura
+    for m in meses:
+        ym = _ym(m)
+        ex = executado.get(ym)
+        entrou, saiu = (ex.inflow_cents, ex.outflow_cents) if ex else (0, 0)
+        futuro, corrente = m > atual, m == atual
+        pin, pout = previsto.get(ym, (0, 0)) if m >= atual else (0, 0)
+        saldo += entrou - saiu
+        fecha = proj_fecha.get(ym, saldo) if futuro else saldo
+        orcado = _budget.budget_net_cents(session, m)
+        liquido = entrou - saiu + (pin - pout if corrente or futuro else 0)
+        linhas.append(CashMonthRow(ym, entrou, saiu, pin, pout, fecha, futuro, corrente, orcado,
+                                   None if orcado is None else liquido - orcado))
+    return CashMonthly(linhas)

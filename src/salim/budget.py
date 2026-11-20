@@ -121,3 +121,28 @@ def budget_vs_actual(session: Session, month: date, today: date) -> list[BudgetS
         saida.append(BudgetStatus(conta.code, conta.name, linha.profile, linha.amount_cents, real, previsto,
                                   linha.amount_cents - real, pct, alerta))
     return saida
+
+
+def budget_net_cents(session: Session, month: date) -> int | None:
+    """Receitas orçadas − despesas orçadas no mês (None se não há orçamento nenhum).
+
+    Se um grupo e um filho dele têm meta, vale a do grupo (mais alto): senão contaria duas vezes.
+    """
+    month = month_start(month)
+    pai = dict(session.execute(select(Account.id, Account.parent_id)).all())
+    contas = session.execute(select(Account).where(Account.id.in_(select(BudgetLine.account_id)))).scalars().all()
+    efetivas = {c.id: (c, _effective(session, c.id, month)) for c in contas}
+    efetivas = {i: (c, l) for i, (c, l) in efetivas.items() if l is not None}
+    if not efetivas:
+        return None
+    total = 0
+    for i, (conta, linha) in efetivas.items():
+        a, coberta = pai.get(i), False
+        while a is not None:
+            if a in efetivas:
+                coberta = True
+                break
+            a = pai.get(a)
+        if not coberta:
+            total += linha.amount_cents if conta.type == AccountType.INCOME else -linha.amount_cents
+    return total

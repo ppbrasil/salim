@@ -109,3 +109,41 @@ def sparkline(values: list[int], w: int = 90, h: int = 22) -> Markup:
                   f'<polyline points="{linha}" fill="none" stroke="var(--s1)" stroke-width="2" '
                   f'stroke-linejoin="round" stroke-linecap="round"/>'
                   f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/></svg>')
+
+
+def line_chart(months: list[str], values: list[int], *, future_from: int | None = None, color: int = 1,
+               height: int = 220, label: str = "") -> Markup:
+    """Uma série em linha (aceita valores negativos). A partir de `future_from` o traço é tracejado (projeção)."""
+    n = len(months)
+    W, ml, mr, mt, mb = 920, 64, 24, 14, 30
+    H = height
+    pw, ph = W - ml - mr, H - mt - mb
+    lo, hi = min(0, min(values, default=0)), max(0, max(values, default=0))
+    _, passo = _escala(max(abs(lo), abs(hi)))
+    teto = passo * (-(-hi // passo)) if hi > 0 else 0
+    piso = -passo * (-(-abs(lo) // passo)) if lo < 0 else 0
+    if teto == piso:
+        teto = passo
+    y = lambda c: mt + ph - ph * (c - piso) / (teto - piso)
+    x = lambda i: ml + pw * (i + 0.5) / n
+    out = [f'<svg class="viz" viewBox="0 0 {W} {H}" role="img" aria-label="{escape(label)}" preserveAspectRatio="xMidYMid meet">']
+    k = piso
+    while k <= teto:
+        out.append(f'<line x1="{ml}" x2="{W - mr}" y1="{y(k):.1f}" y2="{y(k):.1f}" class="{"grid zero" if k == 0 else "grid"}"/>'
+                   f'<text x="{ml - 8}" y="{y(k) + 4:.1f}" class="ax" text-anchor="end">{curto(k)}</text>')
+        k += passo
+    corte = n if future_from is None else future_from
+    real = " ".join(f"{x(i):.1f},{y(v):.1f}" for i, v in enumerate(values[:max(corte, 1)]))
+    out.append(f'<polyline points="{real}" fill="none" stroke="var(--s{color})" stroke-width="2" stroke-linejoin="round"/>')
+    if future_from is not None and future_from < n:
+        ini = max(future_from - 1, 0)
+        proj = " ".join(f"{x(i):.1f},{y(values[i]):.1f}" for i in range(ini, n))
+        out.append(f'<polyline points="{proj}" fill="none" stroke="var(--s{color})" stroke-width="2" stroke-dasharray="6 4" stroke-linejoin="round"/>')
+    for i, (ym, v) in enumerate(zip(months, values)):
+        proj = future_from is not None and i >= future_from
+        out.append(f'<text x="{x(i):.1f}" y="{H - 10}" class="ax" text-anchor="middle">{mes_curto(ym)}</text>')
+        fill = "var(--surface)" if proj else f"var(--s{color})"
+        out.append(f'<circle cx="{x(i):.1f}" cy="{y(v):.1f}" r="5" fill="{fill}" style="stroke:var(--s{color})" stroke-width="2" class="seg">'
+                   f'<title>{mes_curto(ym)} · saldo{" projetado" if proj else ""}: {brl(v)}</title></circle>')
+    out.append("</svg>")
+    return Markup("".join(out))

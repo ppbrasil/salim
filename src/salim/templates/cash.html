@@ -1,22 +1,46 @@
 {% extends "base.html" %}
 {% block title %}Caixa · Salim{% endblock %}
+{% block main_class %}wide{% endblock %}
 {% block content %}
-<h1>Fluxo de caixa</h1>
-<h2>Executado</h2>
-<table>
-  <thead><tr><th>Mês</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Líquido</th></tr></thead>
-  <tbody>{% for m in executado %}
-    <tr><td>{{ (m.month ~ '-01') | mes }}</td><td class="num">{{ m.inflow_cents | brl }}</td>
-        <td class="num">{{ m.outflow_cents | brl }}</td><td class="num {{ 'neg' if m.net_cents < 0 }}">{{ m.net_cents | brl }}</td></tr>
-  {% endfor %}</tbody>
+<h1>Caixa mês a mês <span class="muted" style="font-size:.9rem">o que entrou e saiu de fato (data do evento) · meses futuros: previsão pelos títulos em aberto</span></h1>
+<form method="get" style="margin:.4rem 0">
+  <label>De <input type="month" name="start" value="{{ ini.isoformat()[:7] }}"></label>
+  <label>até <input type="month" name="end" value="{{ fim.isoformat()[:7] }}"></label> <button>Ver</button>
+</form>
+
+<div class="card tiles">
+  <div class="tile"><div class="l">Saldo de caixa{% if saldo_atual %} ao fim de {{ saldo_atual.month | mes_curto }}{% endif %}</div>
+    <div class="v {{ 'neg' if saldo_atual and saldo_atual.closing_cents < 0 }}">{{ saldo_atual.closing_cents | brl if saldo_atual else '–' }}</div></div>
+  <div class="tile"><div class="l">Entrou no período</div><div class="v">{{ tot_in | brl }}</div></div>
+  <div class="tile"><div class="l">Saiu no período</div><div class="v">{{ tot_out | brl }}</div></div>
+  <div class="tile"><div class="l">Líquido</div><div class="v {{ 'neg' if tot_in < tot_out }}">{{ (tot_in - tot_out) | brl }}</div></div>
+</div>
+
+<div class="card"><h2>Entradas × saídas</h2>
+  {{ bar_chart(reais_meses, entradas_saidas, label="Entradas e saídas de caixa por mês") }}{{ legend(entradas_saidas) }}
+</div>
+<div class="card"><h2>Saldo de caixa ao fim do mês <span class="muted">· tracejado = projeção</span></h2>
+  {{ line_chart(c.months | map(attribute='month') | list, saldos, future_from=primeiro_futuro, label="Saldo de caixa ao fim de cada mês") }}
+</div>
+
+<div class="card scroll">
+<table class="mensal">
+  <thead><tr><th class="name">R$</th>{% for r in c.months %}<th class="num">{{ r.month | mes_curto }}{% if r.is_future %}<br><span class="muted">projeção</span>{% elif r.is_current %}<br><span class="muted">em curso</span>{% endif %}</th>{% endfor %}</tr></thead>
+  <tbody>
+    <tr class="l1"><td class="name">Entradas</td>{% for r in c.months %}<td class="num">{{ r.inflow_cents | num if r.inflow_cents else '–' }}</td>{% endfor %}</tr>
+    <tr class="l1"><td class="name">Saídas</td>{% for r in c.months %}<td class="num">{{ r.outflow_cents | num if r.outflow_cents else '–' }}</td>{% endfor %}</tr>
+    <tr class="l0"><td class="name">Líquido do mês</td>{% for r in c.months %}<td class="num {{ 'neg' if r.net_cents < 0 }}">{{ r.net_cents | num }}</td>{% endfor %}</tr>
+    <tr class="l0"><td class="name">Saldo ao fim do mês</td>{% for r in c.months %}<td class="num {{ 'neg' if r.closing_cents < 0 }}">{{ r.closing_cents | num }}</td>{% endfor %}</tr>
+    <tr><td class="name muted">A receber previsto (títulos)</td>{% for r in c.months %}<td class="num muted">{{ r.expected_in_cents | num if r.expected_in_cents else '–' }}</td>{% endfor %}</tr>
+    <tr><td class="name muted">A pagar previsto (títulos)</td>{% for r in c.months %}<td class="num muted">{{ r.expected_out_cents | num if r.expected_out_cents else '–' }}</td>{% endfor %}</tr>
+    {% if tem_orcamento %}
+    <tr><td class="name muted">Orçado (receitas − despesas)</td>{% for r in c.months %}<td class="num muted">{{ r.budget_net_cents | num if r.budget_net_cents is not none else '–' }}</td>{% endfor %}</tr>
+    <tr class="l1"><td class="name">Desvio vs orçado</td>{% for r in c.months %}<td class="num {{ 'neg' if r.deviation_cents is not none and r.deviation_cents < 0 }}">{{ r.deviation_cents | num if r.deviation_cents is not none else '–' }}</td>{% endfor %}</tr>
+    {% endif %}
+  </tbody>
 </table>
-<h2>Projetado <span class="muted">(a partir de {{ hoje.isoformat() | data }}; títulos na data planejada ou no vencimento)</span></h2>
-<table>
-  <thead><tr><th>Mês</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Já vencido</th><th class="num">Saldo ao fim</th></tr></thead>
-  <tbody>{% for m in projetado %}
-    <tr><td>{{ (m.month ~ '-01') | mes }}</td><td class="num">{{ m.inflow_cents | brl }}</td><td class="num">{{ m.outflow_cents | brl }}</td>
-        <td class="num {{ 'atrasada' if m.late_cents }}">{{ m.late_cents | brl }}</td>
-        <td class="num {{ 'neg' if m.closing_cents < 0 }}">{{ m.closing_cents | brl }}</td></tr>
-  {% endfor %}</tbody>
-</table>
+<p class="muted" style="font-size:13px">Transferência entre contas de caixa não conta como entrada nem saída.
+  {% if tem_orcamento %}Desvio = líquido do mês (no mês corrente, executado + previsto) − orçado; negativo = pior que o orçado.
+  {% else %}Defina o <a href="/ui/budget">orçamento</a> para ver o desvio contra o projetado.{% endif %}</p>
+</div>
 {% endblock %}
