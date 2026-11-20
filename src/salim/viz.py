@@ -48,11 +48,22 @@ def _barra(x: float, y: float, w: float, h: float, r: float = 4) -> str:
             f"L{x + w - r:.1f},{y:.1f} Q{x + w:.1f},{y:.1f} {x + w:.1f},{y + r:.1f} L{x + w:.1f},{y + h:.1f} Z")
 
 
+def rotulo(cents: int) -> str:
+    """R$ 31,8 mil — valor acima da barra."""
+    v = abs(cents) / 100
+    if v >= 1_000_000:
+        return f"R$ {v / 1_000_000:.1f} mi".replace(".", ",")
+    if v >= 1000:
+        return f"R$ {v / 1000:.1f} mil".replace(".", ",")
+    return f"R$ {v:.0f}"
+
+
 def bar_chart(months: list[str], series: list[tuple[str, int, list[int]]], *, stacked: bool = False,
-              height: int = 260, label: str = "") -> Markup:
-    """Colunas por mês. series = [(nome, índice da cor 1..8, valores em centavos)]. Valores ≥ 0."""
+              height: int = 260, label: str = "", rotulos: bool = False) -> Markup:
+    """Colunas por mês. series = [(nome, índice da cor 1..9, valores em centavos)]. Valores ≥ 0.
+    `rotulos`: escreve o valor acima de cada barra (para uma série só)."""
     n = len(months)
-    W, ml, mr, mt, mb = 920, 64, 12, 12, 30
+    W, ml, mr, mt, mb = 920, 64, 12, 12 + (10 if rotulos else 0), 30
     H = height
     pw, ph = W - ml - mr, H - mt - mb
     totais = [sum(s[2][i] for s in series) for i in range(n)] if stacked else None
@@ -87,6 +98,45 @@ def bar_chart(months: list[str], series: list[tuple[str, int, list[int]]], *, st
                 h = ph * v / teto
                 out.append(f'<path d="{_barra(x0 + j * w + 1, y(v), w - 2, h)}" fill="var(--s{cor})" class="seg">'
                            f'<title>{mes_curto(ym)} · {escape(nome)}: {brl(v)}</title></path>')
+                if rotulos:
+                    out.append(f'<text x="{x0 + j * w + w / 2:.1f}" y="{y(v) - 6:.1f}" class="val" text-anchor="middle">{rotulo(v)}</text>')
+    out.append("</svg>")
+    return Markup("".join(out))
+
+
+def share_chart(months: list[str], series: list[tuple[str, int, list[int]]], *, height: int = 280,
+                label: str = "") -> Markup:
+    """Uma barra de 100% por mês, fatiada por série. Mês sem valor não desenha barra. Mostra % nas fatias ≥ 8%."""
+    n = len(months)
+    W, ml, mr, mt, mb = 920, 64, 12, 12, 30
+    H = height
+    pw, ph = W - ml - mr, H - mt - mb
+    y = lambda pct: mt + ph - ph * pct / 100
+    out = [f'<svg class="viz" viewBox="0 0 {W} {H}" role="img" aria-label="{escape(label)}" preserveAspectRatio="xMidYMid meet">']
+    for k in (0, 25, 50, 75, 100):
+        out.append(f'<line x1="{ml}" x2="{W - mr}" y1="{y(k):.1f}" y2="{y(k):.1f}" class="grid"/>'
+                   f'<text x="{ml - 8}" y="{y(k) + 4:.1f}" class="ax" text-anchor="end">{k}%</text>')
+    faixa = pw / max(n, 1)
+    larg = faixa * 0.7
+    for i, ym in enumerate(months):
+        x0 = ml + faixa * i + (faixa - larg) / 2
+        out.append(f'<text x="{ml + faixa * i + faixa / 2:.1f}" y="{H - 10}" class="ax" text-anchor="middle">{mes_curto(ym)}</text>')
+        total = sum(max(vals[i], 0) for _, _, vals in series)
+        if total <= 0:
+            continue
+        base = 0.0
+        for nome, cor, vals in series:
+            v = vals[i]
+            if v <= 0:
+                continue
+            pct = 100 * v / total
+            top = y(base + pct)
+            h = ph * pct / 100
+            out.append(f'<rect x="{x0:.1f}" y="{top:.1f}" width="{larg:.1f}" height="{h:.1f}" fill="var(--s{cor})" class="seg">'
+                       f'<title>{mes_curto(ym)} · {escape(nome)}: {brl(v)} ({pct:.0f}%)</title></rect>')
+            if pct >= 8:
+                out.append(f'<text x="{x0 + larg / 2:.1f}" y="{top + h / 2 + 4:.1f}" class="pct" text-anchor="middle">{pct:.0f}%</text>')
+            base += pct
     out.append("</svg>")
     return Markup("".join(out))
 

@@ -73,7 +73,7 @@ def test_tela_dre_mensal_tem_colunas_grupos_graficos_e_resultado(client):
     html = client.get("/ui/reports/dre", params={"start": "2026-08", "end": "2026-10"}).text
     assert all(m in html for m in ("ago/26", "set/26", "out/26"))              # uma coluna por mês
     assert 'data-code="5.02"' in html and 'data-code="5.02.01"' in html         # grupo e conta
-    assert "Despesas por grupo" in html and "<svg" in html and "<title>set/26 · Alimentação" in html
+    assert "<svg" in html and "<title>set/26 · Alimentação" in html
     assert "Resultado" in html and "4.250,00" in html                        # resultado de setembro
 
 
@@ -87,3 +87,22 @@ def test_tela_dre_sem_periodo_vai_do_primeiro_movimento_ate_o_mes_corrente(clien
 
 def test_tela_dre_vazia_nao_quebra(client):
     assert client.get("/ui/reports/dre").status_code == 200
+
+
+def test_tela_dre_separa_receita_e_despesa_em_dois_graficos_cada(client):
+    """Receita: total por mês + barra 100% por origem. Despesa: total por mês + barra 100% por grupo."""
+    _dados(client)
+    html = client.get("/ui/reports/dre", params={"start": "2026-08", "end": "2026-10"}).text
+    for titulo in ("Receita por mês", "Receita por origem", "Despesa por mês", "Despesa por grupo"):
+        assert titulo in html
+    assert "Receitas × despesas" not in html                       # nada de receita e despesa no mesmo gráfico
+    assert "<title>set/26 · Alimentação: R$ 550,00 (73%)</title>" in html     # fatia de 100% com valor e %
+    assert "<title>set/26 · Salário: R$ 5.000,00 (100%)</title>" in html
+    assert "<title>set/26 · despesa: R$ 750,00</title>" in html                # total do mês
+
+
+def test_share_chart_soma_100_por_cento_e_pula_mes_vazio():
+    from salim import viz
+    svg = str(viz.share_chart(["2026-08", "2026-09"], [("A", 1, [300, 0]), ("B", 2, [100, 0])], label="x"))
+    assert "(75%)" in svg and "(25%)" in svg and "100%" in svg      # eixo vai até 100%
+    assert svg.count("<rect") == 2                                  # mês sem valor não desenha nada

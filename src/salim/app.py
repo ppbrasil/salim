@@ -33,7 +33,7 @@ templates.env.filters["data"] = lambda iso: f"{iso[8:10]}/{iso[5:7]}/{iso[:4]}"
 templates.env.filters["mes"] = lambda iso: f"{MESES[int(iso[5:7]) - 1]}/{iso[:4]}"
 templates.env.filters["mes_curto"] = viz.mes_curto
 templates.env.filters["num"] = lambda c: brl(c).replace("R$ ", "")
-templates.env.globals.update(line_chart=viz.line_chart, bar_chart=viz.bar_chart, legend=viz.legend, sparkline=viz.sparkline)
+templates.env.globals.update(line_chart=viz.line_chart, bar_chart=viz.bar_chart, legend=viz.legend, share_chart=viz.share_chart, sparkline=viz.sparkline)
 
 
 class EntryIn(BaseModel):
@@ -570,6 +570,19 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
         except ValueError:
             raise HTTPException(422, f"mês inválido: {v}")
 
+    def _fatias(grupos, n):
+        """Séries para o gráfico de 100%: um grupo por fatia, cor fixa pela ordem do código; o que passar de 9 vira 'Outros'.
+        Grupo 'Outras…' (código terminado em .99) fica com o cinza (9), reservado ao resto."""
+        grupos = sorted(grupos, key=lambda r: r.code)
+        if len(grupos) <= 9:
+            cinza = [g for g in grupos if g.code.endswith(".99")]
+            cores = iter(range(1, 9 if cinza else 10))
+            return [(g.name, 9 if g in cinza else next(cores), g.cents) for g in grupos]
+        top = sorted(sorted(grupos, key=lambda r: -r.total_cents)[:8], key=lambda r: r.code)
+        series = [(g.name, i + 1, g.cents) for i, g in enumerate(top)]
+        resto = [sum(g.cents[i] for g in grupos if g not in top) for i in range(n)]
+        return series + [("Outros", 9, resto)]
+
     def _janela(session, start, end, hoje, max_meses=12):
         """Período padrão: do primeiro mês com movimento até o mês corrente, no máximo `max_meses` meses."""
         atual = ledger.month_start(hoje)
@@ -593,17 +606,12 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
             ini, fim = fim, ini
         m = reports.dre_monthly(session, ini, fim)
         n = len(m.months)
-        grupos = [r for r in m.rows if r.type == "expense" and r.depth == 1]
-        top = sorted(grupos, key=lambda r: -r.total_cents)[:7]
-        top_codes = sorted(g.code for g in top)
-        cor = {c: i + 1 for i, c in enumerate(top_codes)}
-        empilhado = [(g.name, cor[g.code], g.cents) for g in sorted(top, key=lambda r: r.code)]
-        resto = [sum(g.cents[i] for g in grupos if g.code not in cor) for i in range(n)]
-        if any(resto):
-            empilhado.append(("Outros", 9, resto))
+        por_grupo = _fatias([r for r in m.rows if r.type == "expense" and r.depth == 1], n)
+        por_origem = _fatias([r for r in m.rows if r.type == "income" and r.depth == 1], n)
         return templates.TemplateResponse(request, "dre.html", {
             "m": m, "n": n, "ini": ini, "fim": fim, "atual": reports._ym(ledger.month_start(hoje)),
-            "rec_desp": [("Receitas", 1, m.income), ("Despesas", 2, m.expense)], "empilhado": empilhado,
+            "tot_receita": [("receita", 1, m.income)], "tot_despesa": [("despesa", 1, m.expense)],
+            "por_origem": por_origem, "por_grupo": por_grupo,
             "resultado": m.result, "tot_rec": sum(m.income), "tot_desp": sum(m.expense)})
 
     @app.get("/ui/reports/cash")

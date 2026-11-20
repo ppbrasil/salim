@@ -15,12 +15,20 @@
   <div class="tile"><div class="l">Despesa média por mês</div><div class="v">{{ (tot_desp // n) | brl }}</div></div>
 </div>
 
-<div class="card"><h2>Receitas × despesas</h2>
-  {{ bar_chart(m.months, rec_desp, label="Receitas e despesas por mês") }}{{ legend(rec_desp) }}
+<div class="card"><h2>Receita por mês</h2>
+  {{ bar_chart(m.months, tot_receita, label="Receita total por mês", rotulos=True) }}
 </div>
-{% if empilhado %}
-<div class="card"><h2>Despesas por grupo</h2>
-  {{ bar_chart(m.months, empilhado, stacked=True, label="Despesas por grupo, por mês") }}{{ legend(empilhado) }}
+{% if por_origem %}
+<div class="card"><h2>Receita por origem <span class="muted" style="font-size:.85rem">% de cada mês</span></h2>
+  {{ share_chart(m.months, por_origem, label="Receita por origem, % do mês") }}{{ legend(por_origem) }}
+</div>
+{% endif %}
+<div class="card"><h2>Despesa por mês</h2>
+  {{ bar_chart(m.months, tot_despesa, label="Despesa total por mês", rotulos=True) }}
+</div>
+{% if por_grupo %}
+<div class="card"><h2>Despesa por grupo <span class="muted" style="font-size:.85rem">% de cada mês</span></h2>
+  {{ share_chart(m.months, por_grupo, label="Despesa por grupo, % do mês") }}{{ legend(por_grupo) }}
 </div>
 {% endif %}
 
