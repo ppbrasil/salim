@@ -82,8 +82,8 @@ Pendente de E12: reconstruir V13–V18 com os itens da planilha (hoje cada viage
 ## E10 Migração para Vercel + Neon ⬜ (plano em `docs/MIGRACAO_VERCEL_NEON.md`)
 M0 ✅ Postgres de teste (compose + CI) · M1 ✅ `schema_pg.sql` + testes parametrizados (197 verdes no PG, 52 na lista da M2) · M2 ✅ SQL cru e casts (PG 249 verdes, CI bloqueante nos dois bancos) · M3 ✅ migrações fora da partida (`python -m salim.migrate [--seed]`, lock consultivo, 1 transação por arquivo; PG 256 verdes) · M4 ✅ estado do bot em tabelas `bot_pending`/`bot_seen` (PG 264 verdes) · M5 ✅ trava de login em tabela `login_throttle` (PG 268 verdes) · M6 ✅ fuso America/Sao_Paulo (`salim.clock.today`, PG 274 verdes) · M7 ✅ engine serverless (NullPool, SSL, retry de cold start, `DATABASE_URL`; falta só a conexão com o Neon real) · M8 🟡 deploy Vercel + webhook Telegram (código pronto: `api/index.py`, `vercel.json`; falta Neon + variáveis + deploy + `setWebhook`) · M9 backup `pg_dump` no GitHub Actions + restauração · M10 corte (remove SQLite)
 
-## Situação (19/11/2026)
-E0–E9 implementados + camada de produção (login, backup diário, HTTPS via Caddy): 246 testes verdes com `-W error`. Falta antes de uso com dinheiro real: `docker build` rodado fora deste ambiente, restauração de backup testada no servidor, backup copiado para fora do servidor, versionamento de schema (Alembic), WhatsApp/Telegram testados contra as APIs reais, tela de importação, MCP por HTTP (hoje só stdio).
+## Situação (20/11/2026)
+E0–E9 e E12 implementados, em produção na Vercel + Neon (telas de DRE, caixa, a pagar e a receber): 325 testes verdes no Postgres e no SQLite, com `-W error`. Falta antes de uso com dinheiro real: `docker build` rodado fora deste ambiente, restauração de backup testada no servidor, backup copiado para fora do servidor, versionamento de schema (Alembic), WhatsApp/Telegram testados contra as APIs reais, tela de importação, MCP por HTTP (hoje só stdio).
 
 ## Riscos conhecidos
 - Migrações: schema nasce do `schema.sql`; antes de dados reais entra Alembic ou versionamento de schema.
