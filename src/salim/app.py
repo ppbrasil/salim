@@ -18,7 +18,7 @@ from salim.money import brl, parse_brl
 from salim.auth import AuthConfig, LoginLimiter, make_session, read_session, verify_password
 from salim.channels import WhatsAppChannel, WhatsAppSender
 from salim.telegram import Bot, HttpSender
-from salim import cards, chartcfg, bankimport as imp, budget as bud, ledger, obligations as obl, reports, viz
+from salim import cards, chartcfg, bankimport as imp, budget as bud, budgetplan, ledger, obligations as obl, reports, viz
 from salim.chart import seed_chart
 from salim.clock import today as clock_today
 from salim.db import make_session_factory
@@ -813,6 +813,36 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
         except bud.BudgetError as e:
             return _budget_page(request, session, clock_today(), clock_today(), form, str(e), 422)
         return RedirectResponse("/ui/budget", status_code=303)
+
+    def _plan_page(request, session, hoje, erros=None, form=None, status=200):
+        return templates.TemplateResponse(request, "budget_plan.html", {
+            "planos": [("Receitas", budgetplan.build_plan(session, "income", hoje)),
+                       ("Despesas", budgetplan.build_plan(session, "expense", hoje))],
+            "erros": erros or {}, "form": form or {}}, status_code=status)
+
+    @app.get("/ui/budget/plan")
+    def ui_budget_plan(request: Request, today: date | None = None, session=Depends(get_session)):
+        return _plan_page(request, session, today or clock_today())
+
+    @app.post("/ui/budget/plan")
+    async def ui_budget_plan_save(request: Request, session=Depends(get_session)):
+        form = {k[2:]: v.strip() for k, v in (await request.form()).items() if k.startswith("b_")}
+        valores, erros = {}, {}
+        for codigo, texto in form.items():
+            if not texto:
+                continue
+            try:
+                valores[codigo] = parse_brl(texto)
+            except ValueError:
+                erros[codigo] = "valor inválido"
+        if not erros:
+            try:
+                budgetplan.save_plan(session, valores)
+            except bud.BudgetError as e:
+                erros[next(iter(valores), "")] = str(e)
+        if erros:
+            return _plan_page(request, session, clock_today(), erros, form, 422)
+        return RedirectResponse("/ui/budget/plan", status_code=303)
 
     def _form_page(request, session, form, erro=None, status=200):
         contas = [c for _, c in ledger.account_tree(session, include_archived=False) if not c.is_group]

@@ -2,6 +2,7 @@
 {% block title %}Orçamento · Salim{% endblock %}
 {% block content %}
 <h1>Orçamento · {{ month.isoformat() | mes }}</h1>
+<p><a href="/ui/budget/plan"><b>Planejar orçamento</b></a> — defina o valor de cada linha vendo a média dos últimos 6 meses.</p>
 <form method="get"><label>Mês <input type="date" name="month" value="{{ month.isoformat() }}"></label> <button>Ver</button></form>
 <table>
   <thead><tr><th>Conta</th><th>Perfil</th><th class="num">Orçado</th><th class="num">Realizado</th><th class="num">Restante</th><th class="num">%</th><th>Situação</th></tr></thead>

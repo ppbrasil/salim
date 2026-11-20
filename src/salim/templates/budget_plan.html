@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Planejar orçamento · Salim{% endblock %}
+{% block content %}
+<h1>Planejar orçamento <span class="muted" style="font-size:.9rem">valor padrão por mês, linha a linha</span></h1>
+<p class="muted">Cada linha mostra a média dos últimos 6 meses fechados (por competência, sem o mês corrente) para você orçar com o pé no chão. Campo vazio = não mexe. <a href="/ui/budget">Ver orçado × realizado do mês</a></p>
+{% if erros %}<p class="erro">Corrija os valores marcados e salve de novo; nada foi gravado.</p>{% endif %}
+<form method="post" action="/ui/budget/plan">
+{% for titulo, plano in planos %}
+<h2 style="margin-top:1.4rem">{{ titulo }}
+  <span class="muted" style="font-size:.85rem">média {{ plano.total_avg_cents | brl }} · orçado {{ plano.total_budget_cents | brl }}
+  · {% if plano.n_months %}últimos {{ plano.n_months }} meses{% else %}sem histórico ainda{% endif %}</span></h2>
+{% macro campo(l) %}
+  <td class="num">{{ l.avg_cents | brl }}</td>
+  <td class="num"><input class="val" name="b_{{ l.code }}" placeholder="0,00"
+      value="{{ form[l.code] if l.code in form else ((l.budget_cents | num) if l.budget_cents is not none else '') }}"
+      {% if l.code in erros %}style="border-color:#c0392b"{% endif %}>
+      {% if l.code in erros %}<div class="erro" style="font-size:.8rem">{{ erros[l.code] }}</div>{% endif %}</td>
+  <td class="num muted">{{ (l.share_pct ~ '%') if l.share_pct is not none else '' }}</td>
+{% endmacro %}
+<div class="card">
+<table>
+  <thead><tr><th>Linha</th><th class="num">Média {{ plano.n_months or 6 }}m</th><th class="num">Orçamento</th><th class="num">% do total</th></tr></thead>
+  {% for g in plano.groups %}
+    {% if g.is_group %}
+      <tr style="background:#faf8f3"><td><b>{{ g.name }}</b></td><td class="num"><b>{{ g.avg_cents | brl }}</b></td>
+          <td class="num"><b>{{ g.budget_cents | brl }}</b></td><td class="num muted">{{ (g.share_pct ~ '%') if g.share_pct is not none else '' }}</td></tr>
+      {% for l in g.lines %}<tr><td style="padding-left:1.2rem">{{ l.name }} <span class="muted">{{ l.code }}</span></td>{{ campo(l) }}</tr>{% endfor %}
+    {% else %}
+      {% for l in g.lines %}<tr><td>{{ l.name }} <span class="muted">{{ l.code }}</span></td>{{ campo(l) }}</tr>{% endfor %}
+    {% endif %}
+  {% endfor %}
+</table>
+</div>
+{% endfor %}
+<button>Salvar orçamento</button>
+</form>
+{% endblock %}
