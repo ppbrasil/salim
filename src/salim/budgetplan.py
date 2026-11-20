@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from salim import budget as bud
-from salim import chartcfg
+from salim import benchmark, chartcfg
 from salim.db import sum_cents
 from salim.ledger import month_start
 from salim.models import Account, AccountType, BudgetLine, Posting
@@ -38,6 +38,7 @@ class PlanGroup:
     monthly: list[int] = field(default_factory=list)
     budget_cents: int = 0             # soma das linhas
     share_pct: int | None = None
+    peer: benchmark.Peer | None = None   # comparativo com a média das famílias brasileiras
 
 
 @dataclass
@@ -113,6 +114,12 @@ def build_plan(session: Session, kind: str, today: date, months: int = 6) -> Pla
     total = sum(g.budget_cents for g in grupos)
     for g in grupos:
         g.share_pct = round(100 * g.budget_cents / total) if total else None
+        ref = benchmark.reference_bps(g.name) if kind == "expense" else None
+        if ref is not None:
+            if total:
+                g.peer = benchmark.position(round(10000 * g.budget_cents / total), ref)
+            elif sum(x.avg_cents for x in grupos):
+                g.peer = benchmark.position(round(10000 * g.avg_cents / sum(x.avg_cents for x in grupos)), ref, "gasto")
         for l in g.lines:
             l.share_pct = round(100 * l.budget_cents / total) if total and l.budget_cents is not None else None
     return Plan(kind, janela, len(janela), grupos, sum(g.avg_cents for g in grupos), total)

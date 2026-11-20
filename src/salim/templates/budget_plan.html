@@ -5,6 +5,19 @@
 <p class="muted">Cada linha mostra a média dos últimos 6 meses fechados (por competência, sem o mês corrente) para você orçar com o pé no chão. Campo vazio = não mexe. <a href="/ui/budget">Ver orçado × realizado do mês</a></p>
 {% if erros %}<p class="erro">Corrija os valores marcados e salve de novo; nada foi gravado.</p>{% endif %}
 <form method="post" action="/ui/budget/plan">
+{% macro comparativo(p) %}{% if p %}
+  {% set topo = [p.ref_pct * 2, p.user_pct * 1.1] | max %}
+  <div class="peer" title="Você: {{ p.user_pct }}% · média das famílias brasileiras: {{ p.ref_pct }}%">
+    <div class="peer-track"><span class="peer-ref" style="left:{{ (100 * p.ref_pct / topo) | round(1) }}%"></span>
+      <span class="peer-me peer-{{ p.label.split()[0] }}" style="left:{{ (100 * p.user_pct / topo) | round(1) }}%"></span></div>
+    <span class="muted" style="font-size:.8rem"><b>{{ p.label }}</b> · {{ p.user_pct | string | replace('.', ',') }}% vs {{ p.ref_pct | string | replace('.', ',') }}%{% if p.basis == 'gasto' %} (pelo gasto){% endif %}</span>
+  </div>{% endif %}{% endmacro %}
+<style>
+  .peer-track { position: relative; height: 8px; width: 9rem; background: #eee; border-radius: 4px; margin: .25rem 0; }
+  .peer-ref { position: absolute; top: -3px; width: 2px; height: 14px; background: #3b3a37; }
+  .peer-me { position: absolute; top: -2px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: #888; border: 2px solid #fff; }
+  .peer-abaixo { background: #3b82a0; } .peer-na { background: #5b9a5b; } .peer-acima { background: #c9822b; }
+</style>
 {% for titulo, plano in planos %}
 <h2 style="margin-top:1.4rem">{{ titulo }}
   <span class="muted" style="font-size:.85rem">média {{ plano.total_avg_cents | brl }} · orçado {{ plano.total_budget_cents | brl }}
@@ -19,11 +32,12 @@
 {% endmacro %}
 <div class="card">
 <table>
-  <thead><tr><th>Linha</th><th class="num">Média {{ plano.n_months or 6 }}m</th><th class="num">Orçamento</th><th class="num">% do total</th></tr></thead>
+  <thead><tr><th>Linha</th><th class="num">Média {{ plano.n_months or 6 }}m</th><th class="num">Orçamento</th><th class="num">% do total</th>{% if titulo == 'Despesas' %}<th>Contra as famílias brasileiras</th>{% endif %}</tr></thead>
   {% for g in plano.groups %}
     {% if g.is_group %}
       <tr style="background:#faf8f3"><td><b>{{ g.name }}</b></td><td class="num"><b>{{ g.avg_cents | brl }}</b></td>
-          <td class="num"><b>{{ g.budget_cents | brl }}</b></td><td class="num muted">{{ (g.share_pct ~ '%') if g.share_pct is not none else '' }}</td></tr>
+          <td class="num"><b>{{ g.budget_cents | brl }}</b></td><td class="num muted">{{ (g.share_pct ~ '%') if g.share_pct is not none else '' }}</td>
+          {% if titulo == 'Despesas' %}<td>{{ comparativo(g.peer) }}</td>{% endif %}</tr>
       {% for l in g.lines %}<tr><td style="padding-left:1.2rem">{{ l.name }} <span class="muted">{{ l.code }}</span></td>{{ campo(l) }}</tr>{% endfor %}
     {% else %}
       {% for l in g.lines %}<tr><td>{{ l.name }} <span class="muted">{{ l.code }}</span></td>{{ campo(l) }}</tr>{% endfor %}
@@ -32,6 +46,7 @@
 </table>
 </div>
 {% endfor %}
+<p class="muted" style="font-size:.85rem">Comparativo: a fatia de cada grupo no seu total contra a média das famílias brasileiras (IBGE, POF 2017-18; traço preto = média do país; "na média" = até 25% de diferença). É a média de todas as rendas — famílias de renda alta gastam proporcionalmente menos em habitação e alimentação. Grupos sem referência não aparecem.</p>
 <button>Salvar orçamento</button>
 </form>
 {% endblock %}

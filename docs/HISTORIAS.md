@@ -115,3 +115,9 @@ E0–E9 e E12 implementados, em produção na Vercel + Neon (telas de DRE, caixa
 - Soma do lançamento = 0 é validada no serviço, não no banco (SQLite sem constraint diferida).
 - Aging histórico ("como estava em outubro") precisa filtrar por `event_date`.
 - Ordenação de códigos de conta é lexicográfica; o plano padrão usa 2 dígitos por nível.
+
+
+## E15 — Orçamento por linha
+- **15.1 Planejar orçamento** (feito): `/ui/budget/plan` lista receitas e despesas em dois níveis, com o campo de orçamento padrão por linha ao lado da média dos últimos 6 meses fechados (competência, sem o mês corrente; começa no primeiro mês com movimento). Grupo mostra a média e a soma dos orçamentos das linhas; perfil (diluído/pontual) e dia são preservados ao salvar; valor inválido não grava nada.
+- **15.2 Comparativo com as famílias brasileiras** (feito, versão de referência): fatia do grupo no total orçado (ou no gasto médio, se não há orçamento) contra a média do IBGE/POF 2017-18 (moradia 36,6%, transporte 18,1%, alimentação 17,5%, saúde 8,0%), em "abaixo / na média / acima" (±25%). Só despesas e só grupos com referência.
+- **15.3 Comparativo com outros usuários** (pendente): exige base multiusuário (hoje o sistema é uma instalação por usuário). Quando houver, trocar a referência por faixa baixa/típica/alta calculada de agregados anônimos, mantendo os rótulos simples.
