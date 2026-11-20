@@ -70,6 +70,11 @@ class ItemIn(BaseModel):
     amount_cents: int
 
 
+class InvoiceRefIn(BaseModel):
+    closing_date: date
+    due_date: date
+
+
 class CardPurchaseIn(BaseModel):
     card_code: str
     event_date: date
@@ -77,6 +82,7 @@ class CardPurchaseIn(BaseModel):
     items: list[ItemIn]
     installments: int = 1
     competence: date | None = None
+    invoices: list[InvoiceRefIn] | None = None  # (fechamento, vencimento) por parcela; padrão: regra do cartão
 
 
 class SettleItemIn(BaseModel):
@@ -354,7 +360,8 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
             faturas = obl.register_card_purchase(
                 session, card_code=body.card_code, event_date=body.event_date, description=body.description,
                 items=[(i.account_code, i.amount_cents) for i in body.items], installments=body.installments,
-                competence=body.competence)
+                competence=body.competence,
+                invoices=None if body.invoices is None else [(i.closing_date, i.due_date) for i in body.invoices])
             return [obl.get_obligation(session, f.id, clock_today()) for f in faturas]
 
     @app.post("/obligations/settle", status_code=201)

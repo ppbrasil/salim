@@ -190,25 +190,29 @@ def _due_after(closing: date, due_day: int) -> date:
     return c if c > closing else _clamp(*_shift(closing.year, closing.month, 1), due_day)
 
 
-def _invoice_for(session: Session, tx: Transaction, card: Account, closing: date) -> Obligation:
-    """Fatura do cartão que fecha em `closing`; abre sozinha se ainda não existe."""
+def _invoice_for(session: Session, tx: Transaction, card: Account, closing: date,
+                 due: date | None = None) -> Obligation:
+    """Fatura do cartão que fecha em `closing`; abre sozinha se ainda não existe (vencimento `due` ou o dia do cartão)."""
     achada = session.execute(select(Obligation).where(
         Obligation.account_id == card.id, Obligation.kind == "invoice", Obligation.closing_date == closing)
     ).scalar_one_or_none()
     if achada:
         return achada
     return create_obligation(
-        session, tx, account_code=card.code, kind="invoice", due_date=_due_after(closing, card.due_day),
+        session, tx, account_code=card.code, kind="invoice", due_date=due or _due_after(closing, card.due_day),
         closing_date=closing, reference=f"{closing.year}-{closing.month:02d}")
 
 
 def register_card_purchase(
     session: Session, *, card_code: str, event_date: date, description: str,
     items: list[tuple[str, int]], installments: int = 1, competence: date | None = None,
+    invoices: list[tuple[date, date]] | None = None,
 ) -> list[Obligation]:
     """Compra no cartão: despesa inteira na competência da compra; o crédito vai para a(s) fatura(s).
 
     Parcelada em N vezes: N créditos em N faturas consecutivas (resto da divisão na primeira).
+    `invoices` (fechamento, vencimento) por parcela substitui a regra do dia de fechamento do cartão: serve para
+    carregar faturas reais, em que o banco processa com atraso e o fechamento varia. Valor negativo é estorno.
     """
     card = get_account(session, card_code)
     if not card.tracks_obligations:
@@ -217,6 +221,8 @@ def register_card_purchase(
         raise ObligationError(f"cartão {card_code} sem dia de fechamento/vencimento")
     if installments < 1:
         raise ObligationError("número de parcelas deve ser ao menos 1")
+    if invoices is not None and len(invoices) != installments:
+        raise ObligationError(f"informe {installments} faturas (uma por parcela), recebi {len(invoices)}")
     total = sum(v for _, v in items)
     base, resto = divmod(total, installments)
     valores = [base + (resto if k == 0 else 0) for k in range(installments)]
@@ -224,8 +230,11 @@ def register_card_purchase(
 
     tx = new_transaction(session, event_date=event_date, description=description, kind="purchase")
     try:
-        faturas = [_invoice_for(session, tx, card, _clamp(*_shift(c0.year, c0.month, k), card.closing_day))
-                   for k in range(installments)]
+        if invoices is not None:
+            faturas = [_invoice_for(session, tx, card, closing, due) for closing, due in invoices]
+        else:
+            faturas = [_invoice_for(session, tx, card, _clamp(*_shift(c0.year, c0.month, k), card.closing_day))
+                       for k in range(installments)]
     except Exception:
         session.rollback()
         raise
