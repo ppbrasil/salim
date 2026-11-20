@@ -701,7 +701,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
             ini = max(primeiro, date(y, m, 1))
         if fim < ini:
             ini, fim = fim, ini
-        futuros = 3 if (not end or fim >= atual) else 0
+        futuros = reports.cash_horizon(session, hoje) if (not end or fim >= atual) else 0
         c = reports.cash_monthly(session, ini, fim, hoje, future_months=futuros)
         meses = [r.month for r in c.months]
         primeiro_futuro = next((i for i, r in enumerate(c.months) if r.is_future), None)

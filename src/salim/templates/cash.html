@@ -33,6 +33,7 @@
     <tr class="l0"><td class="name">Saldo ao fim do mês</td>{% for r in c.months %}<td class="num {{ 'neg' if r.closing_cents < 0 }}">{{ r.closing_cents | num }}</td>{% endfor %}</tr>
     <tr><td class="name muted">A receber previsto (títulos)</td>{% for r in c.months %}<td class="num muted">{{ r.expected_in_cents | num if r.expected_in_cents else '–' }}</td>{% endfor %}</tr>
     <tr><td class="name muted">A pagar previsto (títulos)</td>{% for r in c.months %}<td class="num muted">{{ r.expected_out_cents | num if r.expected_out_cents else '–' }}</td>{% endfor %}</tr>
+    <tr><td class="name muted">&nbsp;&nbsp;das quais faturas de cartão</td>{% for r in c.months %}<td class="num muted">{{ r.expected_cards_cents | num if r.expected_cards_cents else '–' }}</td>{% endfor %}</tr>
     {% if tem_orcamento %}
     <tr><td class="name muted">Orçado (receitas − despesas)</td>{% for r in c.months %}<td class="num muted">{{ r.budget_net_cents | num if r.budget_net_cents is not none else '–' }}</td>{% endfor %}</tr>
     <tr class="l1"><td class="name">Desvio vs orçado</td>{% for r in c.months %}<td class="num {{ 'neg' if r.deviation_cents is not none and r.deviation_cents < 0 }}">{{ r.deviation_cents | num if r.deviation_cents is not none else '–' }}</td>{% endfor %}</tr>

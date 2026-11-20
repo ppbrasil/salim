@@ -173,6 +173,7 @@ class FutureMonth:
     outflow_cents: int
     late_cents: int          # parte da saída que já está vencida (cai no mês corrente)
     closing_cents: int       # saldo de caixa projetado ao fim do mês
+    cards_cents: int = 0     # parte da saída que são faturas de cartão
 
     @property
     def net_cents(self) -> int:
@@ -187,8 +188,9 @@ def cash_future(session: Session, today: date, months: int = 6) -> list[FutureMo
         JOIN transactions t ON t.id = p.transaction_id
         WHERE t.event_date <= :hoje"""), {"hoje": today.isoformat()}).scalar_one()
     primeiro = month_start(today)
-    meses = {_ym(_shift_month(primeiro, k)): [0, 0, 0] for k in range(months)}
-    for esperado, cents in session.execute(text("SELECT expected_date, expected_cents FROM v_cash_future")).all():
+    meses = {_ym(_shift_month(primeiro, k)): [0, 0, 0, 0] for k in range(months)}
+    for esperado, cents, tipo in session.execute(text(
+            "SELECT f.expected_date, f.expected_cents, o.kind FROM v_cash_future f JOIN obligations o ON o.id = f.obligation_id")).all():
         esperado = _as_date(esperado)
         atrasado = esperado < today
         ym = _ym(primeiro) if atrasado else _ym(esperado)
@@ -200,11 +202,23 @@ def cash_future(session: Session, today: date, months: int = 6) -> list[FutureMo
             meses[ym][1] += -cents
             if atrasado:
                 meses[ym][2] += -cents
+            if tipo == "invoice":
+                meses[ym][3] += -cents
     out, saldo = [], abertura
-    for ym, (i, o, late) in meses.items():
+    for ym, (i, o, late, cartoes) in meses.items():
         saldo += i - o
-        out.append(FutureMonth(ym, i, o, late, saldo))
+        out.append(FutureMonth(ym, i, o, late, saldo, cartoes))
     return out
+
+
+def cash_horizon(session: Session, today: date, minimo: int = 3, teto: int = 24) -> int:
+    """Quantos meses à frente do mês corrente a projeção precisa cobrir: até o último título em aberto (faturas futuras
+    de parcelas incluídas), entre `minimo` e `teto`."""
+    ultimo = session.execute(text("SELECT MAX(expected_date) FROM v_cash_future")).scalar_one()
+    if not ultimo:
+        return minimo
+    u, a = _as_date(ultimo), month_start(today)
+    return max(minimo, min(teto, (u.year - a.year) * 12 + u.month - a.month))
 
 
 # ------------------------------------------------------------------ caixa mês a mês (executado + previsto)
@@ -220,6 +234,7 @@ class CashMonthRow:
     is_current: bool
     budget_net_cents: int | None
     deviation_cents: int | None
+    expected_cards_cents: int = 0   # parte do a pagar previsto que são faturas de cartão
 
     @property
     def net_cents(self) -> int:
@@ -257,7 +272,7 @@ def cash_monthly(session: Session, start: date, end: date, today: date, future_m
     if ultimo >= atual:
         n = (ultimo.year - atual.year) * 12 + ultimo.month - atual.month + 1
         for f in cash_future(session, today, n):
-            previsto[f.month] = (f.inflow_cents, f.outflow_cents)
+            previsto[f.month] = (f.inflow_cents, f.outflow_cents, f.cards_cents)
             proj_fecha[f.month] = f.closing_cents
     linhas, saldo = [], abertura
     for m in meses:
@@ -265,11 +280,11 @@ def cash_monthly(session: Session, start: date, end: date, today: date, future_m
         ex = executado.get(ym)
         entrou, saiu = (ex.inflow_cents, ex.outflow_cents) if ex else (0, 0)
         futuro, corrente = m > atual, m == atual
-        pin, pout = previsto.get(ym, (0, 0)) if m >= atual else (0, 0)
+        pin, pout, pcard = previsto.get(ym, (0, 0, 0)) if m >= atual else (0, 0, 0)
         saldo += entrou - saiu
         fecha = proj_fecha.get(ym, saldo) if futuro else saldo
         orcado = _budget.budget_net_cents(session, m)
         liquido = entrou - saiu + (pin - pout if corrente or futuro else 0)
         linhas.append(CashMonthRow(ym, entrou, saiu, pin, pout, fecha, futuro, corrente, orcado,
-                                   None if orcado is None else liquido - orcado))
+                                   None if orcado is None else liquido - orcado, pcard))
     return CashMonthly(linhas)
