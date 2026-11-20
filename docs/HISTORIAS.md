@@ -79,6 +79,7 @@ Decisões: gestão por **competência (mês)**; compra parcelada entra inteira n
 
 | 12.5 | Arquivar conta (`PATCH archived`), sticker "Mês atual" na DRE e no caixa, plano de despesas com no máximo 9 grupos de primeiro nível | Arquivada some do plano, de `GET /accounts` e dos formulários, mas continua nos relatórios; folha só com saldo zero; grupo só sem filhos ativos | B ledger.py, app.py, F dre.html, cash.html |
 | 12.6 | DRE com receita e despesa em gráficos separados: total por mês (com valor sobre a barra) e barra de 100% por origem da receita / por grupo de despesa | Nenhum gráfico mistura receita e despesa; fatia mostra valor e % ao passar o mouse; mês sem valor não desenha barra | B viz.py, app.py, F dre.html |
+| 12.7 | Gasto reembolsável entra direto em "a receber", contra o cartão ou o caixa que pagou (`payer_account_code` em `POST /reimbursements`): duas contas de balanço, nada na DRE | Despesa e receita da DRE ficam em 0; fatura/caixa e a receber andam juntos; exige despesa já lançada **ou** pagador, nunca os dois | B obligations.py, app.py |
 
 Carga real (20/11/2026): V13–V18 refeitas por itens (75 linhas "Incluir" da planilha, 6 pedidos, R$ 5.721,94), cada item abatendo a despesa na própria categoria; `5.17.01`, `5.17` e `5.15` zeradas e arquivadas.
 

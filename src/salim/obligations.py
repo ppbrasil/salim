@@ -396,20 +396,35 @@ def register_reimbursable_expense(
 
 
 def add_reimbursement_item(
-    session: Session, *, event_date: date, description: str, amount_cents: int, expense_account: str,
+    session: Session, *, event_date: date, description: str, amount_cents: int, expense_account: str | None = None,
     obligation_id: int | None = None, competence: date | None = None, reference: str | None = None,
     counterparty: str | None = None, due_date: date | None = None, receivable_account: str = "1.03.01",
+    payer_account_code: str | None = None,
 ) -> Obligation:
     """Põe um gasto reembolsável num pedido de reembolso (um título a receber por evento/viagem).
 
     Sem `obligation_id`, abre um pedido novo (`reference` = nome do evento, `counterparty` = quem vai pagar).
-    O item soma no a receber e abate a despesa na própria categoria: o custo do evento deixa de ser meu.
+    Duas origens, exatamente uma:
+    - `payer_account_code` (cartão ou caixa que pagou): o gasto vai direto para "a receber", contra o pagador.
+      São duas contas de balanço; não há despesa, a DRE não vê nada. É o caminho certo para gastos novos.
+    - `expense_account`: o gasto já foi lançado como despesa (carga antiga); o item soma no a receber e abate
+      a despesa na própria categoria.
     """
     if amount_cents <= 0:
         raise ObligationError("valor do item deve ser positivo")
-    despesa = get_account(session, expense_account)
-    if despesa.type != AccountType.EXPENSE or despesa.is_group:
-        raise ObligationError(f"{expense_account} não é conta de despesa")
+    if (expense_account is None) == (payer_account_code is None):
+        raise ObligationError("informe a conta de despesa já lançada ou a conta que pagou (cartão/caixa), uma só")
+    pagador = None
+    if payer_account_code is not None:
+        pagador = get_account(session, payer_account_code)
+        if pagador.type == AccountType.EXPENSE or pagador.is_group:
+            raise ObligationError(f"{payer_account_code} não pode pagar um reembolso (use cartão ou conta de caixa)")
+        if pagador.tracks_obligations and (not pagador.closing_day or not pagador.due_day):
+            raise ObligationError(f"cartão {payer_account_code} sem dia de fechamento/vencimento")
+    else:
+        despesa = get_account(session, expense_account)
+        if despesa.type != AccountType.EXPENSE or despesa.is_group:
+            raise ObligationError(f"{expense_account} não é conta de despesa")
     tx = new_transaction(session, event_date=event_date, description=description, kind="reimbursement")
 
     def montar():
@@ -426,8 +441,15 @@ def add_reimbursement_item(
                 raise ObligationError(f"pedido {obligation_id} já está quitado: abra um novo")
             receivable_code = conta.code
         codigo = receivable_account if obligation_id is None else receivable_code
-        post_into(session, tx, [Entry(codigo, amount_cents, obligation_id=pedido.id),
-                                Entry(expense_account, -amount_cents, competence)])
+        entries = [Entry(codigo, amount_cents, obligation_id=pedido.id)]
+        if pagador is None:
+            entries.append(Entry(expense_account, -amount_cents, competence))
+        elif pagador.tracks_obligations:
+            fatura = _invoice_for(session, tx, pagador, _closing_on_or_after(event_date, pagador.closing_day))
+            entries.append(Entry(payer_account_code, -amount_cents, obligation_id=fatura.id))
+        else:
+            entries.append(Entry(payer_account_code, -amount_cents))
+        post_into(session, tx, entries)
         return pedido
 
     return _rollback_on_error(session, montar)

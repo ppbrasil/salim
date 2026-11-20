@@ -128,7 +128,8 @@ class ReimbursementItemIn(BaseModel):
     event_date: date
     description: str
     amount_cents: int
-    expense_account: str
+    expense_account: str | None = None      # gasto já lançado como despesa (carga antiga): abate a despesa
+    payer_account_code: str | None = None   # cartão/caixa que pagou: vai direto para "a receber", sem despesa
     competence: date | None = None
     reference: str | None = None       # só ao abrir um pedido novo
     counterparty: str | None = None
