@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from salim.clock import today as clock_today
 from salim.db import sum_cents
 from salim.ledger import DEBIT_NATURE, Entry, get_account, new_transaction, post_into
-from salim.models import Account, Obligation, Posting, Transaction
+from salim.models import Account, AccountType, Obligation, Posting, Transaction
 
 KINDS = ("invoice", "bill", "installment", "consolidated", "reimbursement", "other")
 STATUSES = ("aberta", "a_vencer", "atrasada", "quitada", "credito")
@@ -93,6 +93,29 @@ def _views(session: Session, today: date, where=None) -> list[ObligationView]:
             installment_no=o.installment_no, installment_total=o.installment_total,
             balance_cents=saldo, status=st, days_late=atraso,
             direction="receber" if a.type in DEBIT_NATURE else "pagar"))
+    return saida
+
+
+@dataclass
+class ObligationItem:
+    date: date
+    description: str
+    cents: int        # + aumenta o saldo do título (compra, despesa, item de reembolso); − reduz (pagamento, recebimento)
+
+
+def obligation_items(session: Session, ids: list[int]) -> dict[int, list[ObligationItem]]:
+    """O que compõe o saldo de cada título, em ordem de data: compras da fatura, itens do pedido, pagamentos."""
+    saida: dict[int, list[ObligationItem]] = {i: [] for i in ids}
+    if not ids:
+        return saida
+    q = (select(Posting, Transaction, Account)
+         .join(Transaction, Transaction.id == Posting.transaction_id)
+         .join(Account, Account.id == Posting.account_id)
+         .where(Posting.obligation_id.in_(ids))
+         .order_by(Transaction.event_date, Transaction.id, Posting.id))
+    for p, t, a in session.execute(q).all():
+        sinal = 1 if a.type in DEBIT_NATURE else -1
+        saida[p.obligation_id].append(ObligationItem(t.event_date, t.description, p.amount_cents * sinal))
     return saida
 
 
@@ -368,6 +391,44 @@ def register_reimbursable_expense(
             entries.append(Entry(payer_account_code, -total))
         post_into(session, tx, entries)
         return receber
+
+    return _rollback_on_error(session, montar)
+
+
+def add_reimbursement_item(
+    session: Session, *, event_date: date, description: str, amount_cents: int, expense_account: str,
+    obligation_id: int | None = None, competence: date | None = None, reference: str | None = None,
+    counterparty: str | None = None, due_date: date | None = None, receivable_account: str = "1.03.01",
+) -> Obligation:
+    """Põe um gasto reembolsável num pedido de reembolso (um título a receber por evento/viagem).
+
+    Sem `obligation_id`, abre um pedido novo (`reference` = nome do evento, `counterparty` = quem vai pagar).
+    O item soma no a receber e abate a despesa na própria categoria: o custo do evento deixa de ser meu.
+    """
+    if amount_cents <= 0:
+        raise ObligationError("valor do item deve ser positivo")
+    despesa = get_account(session, expense_account)
+    if despesa.type != AccountType.EXPENSE or despesa.is_group:
+        raise ObligationError(f"{expense_account} não é conta de despesa")
+    tx = new_transaction(session, event_date=event_date, description=description, kind="reimbursement")
+
+    def montar():
+        if obligation_id is None:
+            pedido = create_obligation(session, tx, account_code=receivable_account, kind="reimbursement",
+                                       due_date=due_date or date.fromordinal(event_date.toordinal() + 30),
+                                       reference=reference, counterparty=counterparty)
+        else:
+            pedido = session.get(Obligation, obligation_id)
+            conta = session.get(Account, pedido.account_id) if pedido else None
+            if pedido is None or pedido.kind != "reimbursement" or conta.type not in DEBIT_NATURE:
+                raise ObligationError(f"pedido de reembolso inexistente: {obligation_id}")
+            if _balance(session, obligation_id) <= 0:
+                raise ObligationError(f"pedido {obligation_id} já está quitado: abra um novo")
+            receivable_code = conta.code
+        codigo = receivable_account if obligation_id is None else receivable_code
+        post_into(session, tx, [Entry(codigo, amount_cents, obligation_id=pedido.id),
+                                Entry(expense_account, -amount_cents, competence)])
+        return pedido
 
     return _rollback_on_error(session, montar)
 

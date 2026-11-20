@@ -1,0 +1,4 @@
+{# Lista o que compõe o título. Espera: lista (ObligationItem) #}
+{% if lista %}<details class="itens"><summary>{{ lista | length }} {{ 'movimento' if lista | length == 1 else 'movimentos' }}</summary>
+  <table>{% for i in lista %}<tr><td>{{ i.date.isoformat() | data }}</td><td>{{ i.description }}</td>
+    <td class="num {{ 'muted' if i.cents < 0 }}">{{ i.cents | brl }}</td></tr>{% endfor %}</table></details>{% endif %}

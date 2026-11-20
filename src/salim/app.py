@@ -123,6 +123,17 @@ class ConsolidateIn(BaseModel):
     reference: str | None = None
 
 
+class ReimbursementItemIn(BaseModel):
+    event_date: date
+    description: str
+    amount_cents: int
+    expense_account: str
+    competence: date | None = None
+    reference: str | None = None       # só ao abrir um pedido novo
+    counterparty: str | None = None
+    due_date: date | None = None
+
+
 class RescheduleIn(BaseModel):
     due_date: date | None = None
     planned_date: date | None = None
@@ -420,6 +431,19 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
     def _item(i):
         return {**vars(i), "date": i.date.isoformat()}
 
+    @app.post("/reimbursements", status_code=201)
+    def new_reimbursement(body: ReimbursementItemIn, session=Depends(get_session)):
+        with business_errors():
+            o = obl.add_reimbursement_item(session, **body.model_dump())
+            return obl.get_obligation(session, o.id, clock_today())
+
+    @app.post("/reimbursements/{obligation_id}/items", status_code=201)
+    def add_reimbursement_item(obligation_id: int, body: ReimbursementItemIn, session=Depends(get_session)):
+        dados = body.model_dump(exclude={"reference", "counterparty", "due_date"})
+        with business_errors():
+            o = obl.add_reimbursement_item(session, obligation_id=obligation_id, **dados)
+            return obl.get_obligation(session, o.id, clock_today())
+
     @app.post("/imports/csv", status_code=201)
     def import_csv(body: ImportCsvIn, session=Depends(get_session)):
         with business_errors():
@@ -498,16 +522,43 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
         return templates.TemplateResponse(request, "statement.html",
                                           {"conta": conta, "linhas": ledger.statement(session, code)})
 
+    def _titulos_page(request, session, direction, hoje, erro=None, status=200):
+        todas = [v for v in obl.list_obligations(session, hoje) if v.direction == direction]
+        itens = obl.obligation_items(session, [v.id for v in todas])
+        caixas = [c for _, c in ledger.account_tree(session) if c.is_cash and not c.is_group]
+        aberto = [v for v in todas if v.balance_cents > 0]
+        ctx = {"titulos": todas, "itens": itens, "caixas": caixas, "hoje": hoje, "erro": erro,
+               "total": sum(v.balance_cents for v in aberto),
+               "atrasado": sum(v.balance_cents for v in aberto if v.status == "atrasada"),
+               "prox7": sum(v.balance_cents for v in aberto if v.status == "a_vencer" and (v.due_date - hoje).days <= 7)}
+        pagina = "payables.html" if direction == "pagar" else "receivables.html"
+        return templates.TemplateResponse(request, pagina, ctx, status_code=status)
+
     @app.get("/ui/payables")
     def ui_payables(request: Request, today: date | None = None, session=Depends(get_session)):
-        hoje = today or clock_today()
-        todas = obl.list_obligations(session, hoje)
-        pagar = [v for v in todas if v.direction == "pagar"]
-        receber = [v for v in todas if v.direction == "receber"]
-        return templates.TemplateResponse(request, "payables.html", {
-            "pagar": pagar, "receber": receber, "hoje": hoje,
-            "total_pagar": sum(v.balance_cents for v in pagar if v.balance_cents > 0),
-            "total_receber": sum(v.balance_cents for v in receber if v.balance_cents > 0)})
+        return _titulos_page(request, session, "pagar", today or clock_today())
+
+    @app.get("/ui/receivables")
+    def ui_receivables(request: Request, today: date | None = None, session=Depends(get_session)):
+        return _titulos_page(request, session, "receber", today or clock_today())
+
+    @app.post("/ui/obligations/{obligation_id}/settle")
+    async def ui_settle(obligation_id: int, request: Request, session=Depends(get_session)):
+        form = await request.form()
+        volta = form.get("back") if form.get("back") in ("/ui/payables", "/ui/receivables") else "/ui/payables"
+        direction = "pagar" if volta == "/ui/payables" else "receber"
+        try:
+            dia = date.fromisoformat(form.get("event_date", ""))
+            valor = parse_brl(form["amount"]) if form.get("amount", "").strip() else None
+            with business_errors():
+                obl.settle_obligations(
+                    session, event_date=dia, items=[(obligation_id, valor)], cash_account_code=form.get("cash_account_code", ""),
+                    description="Pagamento" if direction == "pagar" else "Recebimento")
+        except ValueError:
+            return _titulos_page(request, session, direction, clock_today(), "data ou valor inválido", 422)
+        except HTTPException as e:
+            return _titulos_page(request, session, direction, clock_today(), e.detail, 422)
+        return RedirectResponse(volta, status_code=303)
 
     def _mes(v: str | None) -> date | None:
         """Aceita 'AAAA-MM' (campo month do HTML) ou uma data completa."""

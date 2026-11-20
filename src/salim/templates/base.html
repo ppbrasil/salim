@@ -38,6 +38,9 @@
   table.mensal tr.l2 td.name { padding-left: 2rem; font-weight: 400; } table.mensal tr.hide { display: none; }
   table.mensal tr.l1 td.name { cursor: pointer; } table.mensal .car { display: inline-block; width: 1em; color: #667085; }
   table.mensal tr.res { background: #eef0f3; font-weight: 700; border-top: 2px solid #1f2328; }
+  details.acao summary { cursor: pointer; color: #2a78d6; } details.acao form { display: flex; gap: .4rem; flex-wrap: wrap; align-items: end; margin-top: .4rem; }
+  details.acao label { font-size: 12px; color: #667085; display: block; } details.itens summary { cursor: pointer; color: #52514e; }
+  details.itens table { margin: .3rem 0 .2rem 1rem; width: auto; font-size: 13px; }
   .spark { vertical-align: middle; } button.lnk { background: none; border: 0; color: #2a78d6; cursor: pointer; padding: 0 .3rem; }
 </style>
 </head>
@@ -46,6 +49,7 @@
   <a href="/ui/accounts">Plano de contas</a>
   <a href="/ui/transactions/new">Novo lançamento</a>
   <a href="/ui/payables">A pagar</a>
+  <a href="/ui/receivables">A receber</a>
   <a href="/ui/reports/dre">DRE</a>
   <a href="/ui/reports/cash">Caixa</a>
   <a href="/ui/budget">Orçamento</a>

@@ -1,0 +1,10 @@
+{# Formulário de pagar/receber um título. Espera: v (título), caixas, hoje, back, rotulo #}
+<details class="acao"><summary>{{ rotulo }}</summary>
+  <form method="post" action="/ui/obligations/{{ v.id }}/settle">
+    <input type="hidden" name="back" value="{{ back }}">
+    <div><label>Data</label><input type="date" name="event_date" value="{{ hoje.isoformat() }}" required></div>
+    <div><label>Valor (vazio = tudo)</label><input class="val" name="amount" value="{{ (v.balance_cents | num) }}"></div>
+    <div><label>Conta</label><select name="cash_account_code">{% for c in caixas %}<option value="{{ c.code }}">{{ c.name }}</option>{% endfor %}</select></div>
+    <button>{{ rotulo }}</button>
+  </form>
+</details>

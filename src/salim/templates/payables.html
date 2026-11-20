@@ -1,29 +1,32 @@
 {% extends "base.html" %}
 {% block title %}A pagar · Salim{% endblock %}
-{% macro tabela(itens) %}
+{% block content %}
+<h1>A pagar</h1>
+{% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+<div class="card tiles">
+  <div class="tile"><div class="l">Total em aberto</div><div class="v">{{ total | brl }}</div></div>
+  <div class="tile"><div class="l">Atrasado</div><div class="v {{ 'atrasada' if atrasado }}">{{ atrasado | brl }}</div></div>
+  <div class="tile"><div class="l">Vence em 7 dias</div><div class="v">{{ prox7 | brl }}</div></div>
+</div>
+<p class="muted">Posição em {{ hoje.isoformat() | data }} · ordenado por vencimento</p>
 <table>
-  <thead><tr><th>Vencimento</th><th>Título</th><th>Situação</th><th>Planejado</th><th class="num">Saldo</th></tr></thead>
+  <thead><tr><th>Vencimento</th><th>Conta</th><th>Situação</th><th class="num">Saldo</th><th></th></tr></thead>
   <tbody>
-  {% for v in itens %}
+  {% for v in titulos if v.balance_cents != 0 %}
     <tr>
       <td>{{ v.due_date.isoformat() | data }}</td>
       <td>{{ v.counterparty or '' }} {{ v.reference or v.kind }}
-          {% if v.installment_no %}<span class="muted">({{ v.installment_no }}/{{ v.installment_total }})</span>{% endif %}</td>
-      <td class="{{ v.status }}">{{ v.status.replace('_', ' ') }}{% if v.status == 'atrasada' %} · {{ v.days_late }} dias{% endif %}</td>
-      <td class="muted">{{ v.planned_date.isoformat() | data if v.planned_date else '' }}</td>
+          {% if v.installment_no %}<span class="muted">({{ v.installment_no }}/{{ v.installment_total }})</span>{% endif %}
+          {% with lista = itens[v.id] %}{% include "_itens_titulo.html" %}{% endwith %}</td>
+      <td class="{{ v.status }}">{{ v.status.replace('_', ' ') }}{% if v.status == 'atrasada' %} · {{ v.days_late }} dias{% endif %}
+          {% if v.planned_date %}<br><span class="muted">planejado {{ v.planned_date.isoformat() | data }}</span>{% endif %}</td>
       <td class="num">{{ v.balance_cents | brl }}</td>
+      <td>{% if v.balance_cents > 0 and v.status != 'aberta' %}{% with rotulo = 'Pagar', back = '/ui/payables' %}{% include "_acao_baixa.html" %}{% endwith %}
+          {% elif v.status == 'aberta' %}<span class="muted">fatura aberta{% if v.closing_date %} · fecha {{ v.closing_date.isoformat() | data }}{% endif %}</span>{% endif %}</td>
     </tr>
   {% else %}
     <tr><td colspan="5" class="muted">Nada em aberto.</td></tr>
   {% endfor %}
   </tbody>
 </table>
-{% endmacro %}
-{% block content %}
-<h1>A pagar</h1>
-<p>Total em aberto: <strong>{{ total_pagar | brl }}</strong> <span class="muted">(posição em {{ hoje.isoformat() | data }})</span></p>
-{{ tabela(pagar) }}
-<h2>A receber</h2>
-<p>Total: <strong>{{ total_receber | brl }}</strong></p>
-{{ tabela(receber) }}
 {% endblock %}

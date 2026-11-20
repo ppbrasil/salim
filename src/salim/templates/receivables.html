@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}A receber · Salim{% endblock %}
+{% block content %}
+<h1>A receber</h1>
+{% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+<div class="card tiles">
+  <div class="tile"><div class="l">Total a receber</div><div class="v">{{ total | brl }}</div></div>
+  <div class="tile"><div class="l">Vencido</div><div class="v {{ 'atrasada' if atrasado }}">{{ atrasado | brl }}</div></div>
+  <div class="tile"><div class="l">Vence em 7 dias</div><div class="v">{{ prox7 | brl }}</div></div>
+</div>
+<p class="muted">Cada linha é um pedido (evento, viagem, pessoa); abra os movimentos para ver os itens. Posição em {{ hoje.isoformat() | data }}.</p>
+<table>
+  <thead><tr><th>Vencimento</th><th>Pedido</th><th>Devedor</th><th>Situação</th><th class="num">A receber</th><th></th></tr></thead>
+  <tbody>
+  {% for v in titulos if v.balance_cents != 0 %}
+    <tr>
+      <td>{{ v.due_date.isoformat() | data }}</td>
+      <td>{{ v.reference or v.kind }}{% with lista = itens[v.id] %}{% include "_itens_titulo.html" %}{% endwith %}</td>
+      <td>{{ v.counterparty or '' }}</td>
+      <td class="{{ v.status }}">{{ v.status.replace('_', ' ') }}{% if v.status == 'atrasada' %} · {{ v.days_late }} dias{% endif %}</td>
+      <td class="num">{{ v.balance_cents | brl }}</td>
+      <td>{% if v.balance_cents > 0 %}{% with rotulo = 'Receber', back = '/ui/receivables' %}{% include "_acao_baixa.html" %}{% endwith %}{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">Nada a receber.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
