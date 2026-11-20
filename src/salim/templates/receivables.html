@@ -15,7 +15,7 @@
   {% for v in titulos if v.balance_cents != 0 %}
     <tr>
       <td>{{ v.due_date.isoformat() | data }}</td>
-      <td>{{ v.reference or v.kind }}{% with lista = itens[v.id] %}{% include "_itens_titulo.html" %}{% endwith %}</td>
+      <td>{{ v.reference or (itens[v.id][0].description if itens[v.id]) or v.kind }}{% with lista = itens[v.id] %}{% include "_itens_titulo.html" %}{% endwith %}</td>
       <td>{{ v.counterparty or '' }}</td>
       <td class="{{ v.status }}">{{ v.status.replace('_', ' ') }}{% if v.status == 'atrasada' %} · {{ v.days_late }} dias{% endif %}</td>
       <td class="num">{{ v.balance_cents | brl }}</td>

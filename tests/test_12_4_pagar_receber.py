@@ -107,3 +107,9 @@ def test_erro_ao_pagar_pela_tela_mostra_mensagem_e_nao_baixa(client):
                     "cash_account_code": "1.01.01", "back": "/ui/payables"})
     assert r.status_code == 422 and "maior que o saldo" in r.text
     assert client.get("/obligations", params={"today": "2026-08-25"}).json()[0]["balance_cents"] == 10000
+
+
+def test_pedido_sem_referencia_mostra_a_descricao_do_primeiro_item(client):
+    _pedido(client, reference=None)
+    html = client.get("/ui/receivables", params={"today": "2026-08-25"}).text
+    assert "Hotel" in html and "reimbursement" not in html
