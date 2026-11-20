@@ -25,7 +25,7 @@
 
 <div class="card scroll">
 <table class="mensal">
-  <thead><tr><th class="name">R$</th>{% for r in c.months %}<th class="num">{{ r.month | mes_curto }}{% if r.is_future %}<br><span class="muted">projeção</span>{% elif r.is_current %}<br><span class="muted">em curso</span>{% endif %}</th>{% endfor %}</tr></thead>
+  <thead><tr><th class="name">R$</th>{% for r in c.months %}<th class="num">{{ r.month | mes_curto }}{% if r.is_future %}<br><span class="muted">projeção</span>{% elif r.is_current %}<br><span class="sticker">Mês atual</span>{% endif %}</th>{% endfor %}</tr></thead>
   <tbody>
     <tr class="l1"><td class="name">Entradas</td>{% for r in c.months %}<td class="num">{{ r.inflow_cents | num if r.inflow_cents else '–' }}</td>{% endfor %}</tr>
     <tr class="l1"><td class="name">Saídas</td>{% for r in c.months %}<td class="num">{{ r.outflow_cents | num if r.outflow_cents else '–' }}</td>{% endfor %}</tr>

@@ -29,7 +29,7 @@
   <button type="button" class="lnk" onclick="dreTudo(false)">Recolher</button>
   <span class="muted">· clique no grupo para ver as contas · valores em R$</span></div>
 <table class="mensal" id="dre">
-  <thead><tr><th class="name">Conta</th>{% for ym in m.months %}<th class="num">{{ ym | mes_curto }}</th>{% endfor %}
+  <thead><tr><th class="name">Conta</th>{% for ym in m.months %}<th class="num">{{ ym | mes_curto }}{% if ym == atual %}<br><span class="sticker">Mês atual</span>{% endif %}</th>{% endfor %}
     <th class="num">Total</th><th class="num">Média</th><th>Tendência</th></tr></thead>
   <tbody>
   {% for r in m.rows %}

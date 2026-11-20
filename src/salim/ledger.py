@@ -75,10 +75,21 @@ def create_account(
 
 def update_account(
     session: Session, code: str, *, name: str | None = None, new_code: str | None = None,
-    parent_code: str | None = None,
+    parent_code: str | None = None, archived: bool | None = None,
 ) -> Account:
-    """Renomeia, troca o código e/ou muda de grupo. As partidas apontam para o id: o histórico acompanha."""
+    """Renomeia, troca o código, muda de grupo e/ou arquiva. As partidas apontam para o id: o histórico acompanha.
+
+    Só se arquiva conta de saldo zero (e grupo sem filhas ativas): ela some das telas, mas o histórico fica nos relatórios.
+    """
     conta = get_account(session, code)
+    if archived:
+        if conta.is_group:
+            if session.execute(select(Account.id).where(Account.parent_id == conta.id, Account.archived.is_(False))).first():
+                raise InvalidAccountError(f"{code} ainda tem contas filhas ativas")
+        elif session.execute(select(sum_cents(Posting.amount_cents)).where(Posting.account_id == conta.id)).scalar_one() != 0:
+            raise InvalidAccountError(f"{code} tem saldo: zere antes de arquivar")
+    if archived is not None:
+        conta.archived = archived
     if name is not None:
         if not name.strip():
             raise InvalidAccountError("nome não pode ser vazio")
@@ -111,8 +122,12 @@ def get_account(session: Session, code: str) -> Account:
     return conta
 
 
-def account_tree(session: Session) -> list[tuple[int, Account]]:
-    contas = session.execute(select(Account).order_by(Account.code)).scalars().all()
+def account_tree(session: Session, include_archived: bool = True) -> list[tuple[int, Account]]:
+    """Árvore em ordem de código. Contas arquivadas ficam de fora só quando pedido (telas); relatórios as incluem."""
+    q = select(Account).order_by(Account.code)
+    if not include_archived:
+        q = q.where(Account.archived.is_(False))
+    contas = session.execute(q).scalars().all()
     filhos: dict[int | None, list[Account]] = {}
     for c in contas:
         filhos.setdefault(c.parent_id, []).append(c)

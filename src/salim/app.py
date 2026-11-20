@@ -57,6 +57,7 @@ class AccountIn(BaseModel):
 
 
 class AccountPatch(BaseModel):
+    archived: bool | None = None
     name: str | None = None
     new_code: str | None = None
     parent_code: str | None = None
@@ -323,7 +324,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
     @app.get("/accounts")
     def list_accounts(session=Depends(get_session)):
         saldos = ledger.balances_all(session)
-        contas = ledger.account_tree(session)
+        contas = ledger.account_tree(session, include_archived=False)
         raiz: list[dict] = []
         pilha: list[tuple[int, dict]] = []
         for depth, c in contas:
@@ -510,7 +511,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
     @app.get("/ui/accounts")
     def ui_accounts(request: Request, session=Depends(get_session)):
         saldos = ledger.balances_all(session)
-        rows = [(d, c, saldos.get(c.id, 0)) for d, c in ledger.account_tree(session)]
+        rows = [(d, c, saldos.get(c.id, 0)) for d, c in ledger.account_tree(session, include_archived=False)]
         return templates.TemplateResponse(request, "accounts.html", {"rows": rows})
 
     @app.get("/ui/accounts/{code}")
@@ -525,7 +526,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
     def _titulos_page(request, session, direction, hoje, erro=None, status=200):
         todas = [v for v in obl.list_obligations(session, hoje) if v.direction == direction]
         itens = obl.obligation_items(session, [v.id for v in todas])
-        caixas = [c for _, c in ledger.account_tree(session) if c.is_cash and not c.is_group]
+        caixas = [c for _, c in ledger.account_tree(session, include_archived=False) if c.is_cash and not c.is_group]
         aberto = [v for v in todas if v.balance_cents > 0]
         ctx = {"titulos": todas, "itens": itens, "caixas": caixas, "hoje": hoje, "erro": erro,
                "total": sum(v.balance_cents for v in aberto),
@@ -601,7 +602,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
         if any(resto):
             empilhado.append(("Outros", 9, resto))
         return templates.TemplateResponse(request, "dre.html", {
-            "m": m, "n": n, "ini": ini, "fim": fim,
+            "m": m, "n": n, "ini": ini, "fim": fim, "atual": reports._ym(ledger.month_start(hoje)),
             "rec_desp": [("Receitas", 1, m.income), ("Despesas", 2, m.expense)], "empilhado": empilhado,
             "resultado": m.result, "tot_rec": sum(m.income), "tot_desp": sum(m.expense)})
 
@@ -639,7 +640,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
         return [{**vars(r), "net_cents": r.net_cents} for r in c.months]
 
     def _budget_page(request, session, month, hoje, form=None, erro=None, status=200):
-        contas = [c for _, c in ledger.account_tree(session) if c.type in (AccountType.EXPENSE, AccountType.INCOME)]
+        contas = [c for _, c in ledger.account_tree(session, include_archived=False) if c.type in (AccountType.EXPENSE, AccountType.INCOME)]
         return templates.TemplateResponse(request, "budget.html", {
             "linhas": bud.budget_vs_actual(session, month, hoje), "month": ledger.month_start(month), "contas": contas,
             "form": form or {}, "erro": erro}, status_code=status)
@@ -666,7 +667,7 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
         return RedirectResponse("/ui/budget", status_code=303)
 
     def _form_page(request, session, form, erro=None, status=200):
-        contas = [c for _, c in ledger.account_tree(session) if not c.is_group]
+        contas = [c for _, c in ledger.account_tree(session, include_archived=False) if not c.is_group]
         return templates.TemplateResponse(request, "transaction_form.html",
                                           {"form": form, "erro": erro, "contas": contas}, status_code=status)
 
