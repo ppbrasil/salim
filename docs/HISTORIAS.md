@@ -93,7 +93,16 @@ Cada cartão é uma conta de passivo sob `2.01`, como uma conta corrente que sem
 | 13.2 | Resumo por cartão: fatura aberta sempre (virtual se ainda sem compra), fechadas a pagar, parcelas em faturas futuras, **devido (outstanding)** | Devido = soma das faturas = saldo da conta do cartão; depois do fechamento a aberta passa ao próximo ciclo; fatura quitada sai da lista | B cards.py |
 | 13.3 | Telas Cartões (lista com devido, fatura aberta, fechadas, futuras + cadastro) e detalhe do cartão com as faturas e seus itens | Erro de cadastro aparece na tela; menu "Cartões" | B app.py, F cards.html, card.html |
 
+| 13.4 | Caixa projetado enxerga as faturas futuras: horizonte vai até a última fatura/título em aberto (até 24 meses) e linha "das quais faturas de cartão" | Parcela 8x aparece nos 8 vencimentos do cartão; vencimento vem do dia de vencimento do cartão | B reports.py, app.py, F cash.html |
+
 Próximo (conciliação): conferir o devido de cada cartão com o extrato/fatura do cartão e registrar a diferença.
+
+## E14 Configurações ✅ (20/11/2026)
+| ID | História | Teste de aceite | Arquivos |
+|----|----------|-----------------|----------|
+| 14.1 | Plano de contas em dois níveis (grupo e linha) para despesa e receita, editável pela tela Configurações e pela API (`POST /chart/groups`, `/chart/lines`, `/chart/{code}/move`); renomear, mover linha entre grupos, arquivar; código novo automático (`5.NN`, `5.NN.MM`, pula o 99) | Linha não nasce em linha, na raiz nem em outro tipo; nome repetido no mesmo pai e conta com saldo são barrados; mover leva o histórico | B chartcfg.py, app.py, F settings.html |
+
+O plano nasce do padrão (`seed_chart`) e é da pessoa para editar. Pendente: padrão de receita em dois níveis (hoje `4.01 Salário` e `4.02 Outras` são linhas soltas), conciliação de cartões, marcar compra como reembolsável.
 
 ## E10 Migração para Vercel + Neon ⬜ (plano em `docs/MIGRACAO_VERCEL_NEON.md`)
 M0 ✅ Postgres de teste (compose + CI) · M1 ✅ `schema_pg.sql` + testes parametrizados (197 verdes no PG, 52 na lista da M2) · M2 ✅ SQL cru e casts (PG 249 verdes, CI bloqueante nos dois bancos) · M3 ✅ migrações fora da partida (`python -m salim.migrate [--seed]`, lock consultivo, 1 transação por arquivo; PG 256 verdes) · M4 ✅ estado do bot em tabelas `bot_pending`/`bot_seen` (PG 264 verdes) · M5 ✅ trava de login em tabela `login_throttle` (PG 268 verdes) · M6 ✅ fuso America/Sao_Paulo (`salim.clock.today`, PG 274 verdes) · M7 ✅ engine serverless (NullPool, SSL, retry de cold start, `DATABASE_URL`; falta só a conexão com o Neon real) · M8 🟡 deploy Vercel + webhook Telegram (código pronto: `api/index.py`, `vercel.json`; falta Neon + variáveis + deploy + `setWebhook`) · M9 backup `pg_dump` no GitHub Actions + restauração · M10 corte (remove SQLite)

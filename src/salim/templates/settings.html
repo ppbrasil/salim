@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Configurações · Salim{% endblock %}
+{% block content %}
+<h1>Configurações <span class="muted" style="font-size:.9rem">plano de contas · dois níveis: grupo e linha</span></h1>
+{% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+<p class="muted">O plano nasce do padrão e é seu para editar. Mover ou renomear mantém o histórico; arquivar tira da tela e dos formulários, mas os relatórios continuam contando. Conta com saldo não arquiva.</p>
+
+{% macro acoes(code, nome, grupos, pode_mover) %}
+  <details class="inline"><summary>renomear</summary>
+    <form method="post" action="/ui/settings/rename"><input type="hidden" name="code" value="{{ code }}">
+      <input name="name" value="{{ nome }}" required> <button>Salvar</button></form></details>
+  {% if pode_mover %}<details class="inline"><summary>mover</summary>
+    <form method="post" action="/ui/settings/move"><input type="hidden" name="code" value="{{ code }}">
+      <select name="group_code">{% for g in grupos if g.is_group %}<option value="{{ g.code }}">{{ g.name }}</option>{% endfor %}</select>
+      <button>Mover</button></form></details>{% endif %}
+  <form method="post" action="/ui/settings/archive" style="display:inline"><input type="hidden" name="code" value="{{ code }}"><button class="lnk">arquivar</button></form>
+{% endmacro %}
+
+{% for titulo, tipo, grupos in secoes %}
+<h2 style="margin-top:1.4rem">{{ titulo }}</h2>
+{% for g in grupos if g.is_group %}
+<div class="card">
+  <h3 style="margin:.1rem 0 .4rem">{{ g.name }} <span class="muted" style="font-size:.8rem">{{ g.code }}</span></h3>
+  <div style="margin-bottom:.4rem">{{ acoes(g.code, g.name, grupos, False) }}</div>
+  <table>
+    {% for l in g.lines %}
+    <tr><td>{{ l.name }} <span class="muted">{{ l.code }}</span>{% if l.has_postings %} <span class="muted">· com lançamentos</span>{% endif %}
+        {% for f in l.children %}<div class="muted" style="margin-left:1rem">{{ f.name }} <span>{{ f.code }}</span></div>{% endfor %}</td>
+      <td>{{ acoes(l.code, l.name, grupos, True) }}</td></tr>
+    {% else %}<tr><td class="muted">Sem linhas.</td></tr>{% endfor %}
+  </table>
+  <form method="post" action="/ui/settings/lines" style="margin-top:.5rem">
+    <input type="hidden" name="group_code" value="{{ g.code }}">
+    <input name="name" placeholder="Nova linha em {{ g.name }}" required> <button>Adicionar linha</button></form>
+</div>
+{% endfor %}
+{% set soltas = grupos | rejectattr('is_group') | list %}
+{% if soltas %}<div class="card"><h3 style="margin:.1rem 0 .4rem">Linhas sem grupo</h3>
+  <table>{% for l in soltas %}<tr><td>{{ l.name }} <span class="muted">{{ l.code }}</span>{% if l.has_postings %} <span class="muted">· com lançamentos</span>{% endif %}</td>
+    <td>{{ acoes(l.code, l.name, grupos, True) }}</td></tr>{% endfor %}</table></div>{% endif %}
+<div class="card"><form method="post" action="/ui/settings/groups">
+  <input type="hidden" name="type" value="{{ tipo }}">
+  <input name="name" placeholder="Nome do grupo" required> <button>Novo grupo de {{ 'despesa' if tipo == 'expense' else 'receita' }}</button></form></div>
+{% endfor %}
+{% endblock %}

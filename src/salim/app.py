@@ -18,7 +18,7 @@ from salim.money import brl, parse_brl
 from salim.auth import AuthConfig, LoginLimiter, make_session, read_session, verify_password
 from salim.channels import WhatsAppChannel, WhatsAppSender
 from salim.telegram import Bot, HttpSender
-from salim import cards, bankimport as imp, budget as bud, ledger, obligations as obl, reports, viz
+from salim import cards, chartcfg, bankimport as imp, budget as bud, ledger, obligations as obl, reports, viz
 from salim.chart import seed_chart
 from salim.clock import today as clock_today
 from salim.db import make_session_factory
@@ -71,6 +71,20 @@ class CardPatch(BaseModel):
     last4: str | None = None
     closing_day: int | None = None
     due_day: int | None = None
+
+
+class GroupIn(BaseModel):
+    type: str
+    name: str
+
+
+class LineIn(BaseModel):
+    group_code: str
+    name: str
+
+
+class MoveIn(BaseModel):
+    group_code: str
 
 
 class AccountPatch(BaseModel):
@@ -413,6 +427,24 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
                 invoices=None if body.invoices is None else [(i.closing_date, i.due_date) for i in body.invoices])
             return [obl.get_obligation(session, f.id, clock_today()) for f in faturas]
 
+    def _conta_json(c):
+        return {"code": c.code, "name": c.name, "type": c.type.value, "is_group": c.is_group}
+
+    @app.post("/chart/groups", status_code=201)
+    def chart_new_group(body: GroupIn, session=Depends(get_session)):
+        with business_errors():
+            return _conta_json(chartcfg.create_group(session, body.type, body.name))
+
+    @app.post("/chart/lines", status_code=201)
+    def chart_new_line(body: LineIn, session=Depends(get_session)):
+        with business_errors():
+            return _conta_json(chartcfg.create_line(session, body.group_code, body.name))
+
+    @app.post("/chart/{code}/move")
+    def chart_move_line(code: str, body: MoveIn, session=Depends(get_session)):
+        with business_errors():
+            return _conta_json(chartcfg.move_line(session, code, body.group_code))
+
     @app.post("/cards", status_code=201)
     def new_card(body: CardIn, session=Depends(get_session)):
         with business_errors():
@@ -609,6 +641,39 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
         c = _card_or_404(session, code, hoje)
         itens = obl.obligation_items(session, [i.id for i in c.invoices if i.id])
         return templates.TemplateResponse(request, "card.html", {"c": c, "itens": itens, "hoje": hoje})
+
+    def _settings_page(request, session, erro=None, status=200):
+        return templates.TemplateResponse(request, "settings.html", {
+            "secoes": [("Despesas", "expense", chartcfg.settings_tree(session, "expense")),
+                       ("Receitas", "income", chartcfg.settings_tree(session, "income"))],
+            "erro": erro}, status_code=status)
+
+    @app.get("/ui/settings")
+    def ui_settings(request: Request, session=Depends(get_session)):
+        return _settings_page(request, session)
+
+    @app.post("/ui/settings/{acao}")
+    async def ui_settings_acao(acao: str, request: Request, session=Depends(get_session)):
+        f = dict(await request.form())
+        try:
+            with business_errors():
+                if acao == "groups":
+                    chartcfg.create_group(session, f.get("type", ""), f.get("name", ""))
+                elif acao == "lines":
+                    chartcfg.create_line(session, f.get("group_code", ""), f.get("name", ""))
+                elif acao == "rename":
+                    chartcfg.rename(session, f.get("code", ""), f.get("name", ""))
+                elif acao == "move":
+                    chartcfg.move_line(session, f.get("code", ""), f.get("group_code", ""))
+                elif acao == "archive":
+                    chartcfg.archive(session, f.get("code", ""))
+                else:
+                    raise HTTPException(404, "ação desconhecida")
+        except HTTPException as e:
+            if e.status_code == 404:
+                raise
+            return _settings_page(request, session, e.detail, 422)
+        return RedirectResponse("/ui/settings", status_code=303)
 
     @app.get("/ui/payables")
     def ui_payables(request: Request, today: date | None = None, session=Depends(get_session)):

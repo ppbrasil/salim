@@ -30,6 +30,9 @@
   svg.viz .seg:hover { opacity: .8; }
   svg.viz .val { fill: #3b3a37; font-size: 11px; font-weight: 600; }
   svg.viz .pct { fill: #fff; font-size: 11px; font-weight: 600; paint-order: stroke; stroke: rgba(0,0,0,.35); stroke-width: 2px; pointer-events: none; }
+  details.inline { display: inline-block; margin-right: .8rem; vertical-align: top; }
+  details.inline summary { cursor: pointer; color: #2878d6; font-size: .85rem; }
+  details.inline form { margin-top: .3rem; }
   .legend { display: flex; flex-wrap: wrap; gap: .3rem 1rem; font-size: 13px; color: #52514e; margin-top: .3rem; }
   .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
   .tiles { display: flex; gap: 1rem; flex-wrap: wrap; } .tile { flex: 1 1 160px; }
@@ -58,6 +61,7 @@
   <a href="/ui/reports/dre">DRE</a>
   <a href="/ui/reports/cash">Caixa</a>
   <a href="/ui/budget">Orçamento</a>
+  <a href="/ui/settings">Configurações</a>
   {% if request.state.user %}<form method="post" action="/logout" style="margin-left:auto"><button>Sair</button></form>{% endif %}
 </nav>{% endblock %}
 <main class="{% block main_class %}{% endblock %}">{% block content %}{% endblock %}</main>
