@@ -109,6 +109,16 @@ O plano nasce do padrão (`seed_chart`) e é da pessoa para editar. Pendente: pa
 - **15.2 Comparativo com as famílias brasileiras** (feito, versão de referência): fatia do grupo no total orçado (ou no gasto médio, se não há orçamento) contra a média do IBGE/POF 2017-18 (moradia 36,6%, transporte 18,1%, alimentação 17,5%, saúde 8,0%), em "abaixo / na média / acima" (±25%). Só despesas e só grupos com referência.
 - **15.3 Comparativo com outros usuários** (pendente): exige base multiusuário (hoje o sistema é uma instalação por usuário). Quando houver, trocar a referência por faixa baixa/típica/alta calculada de agregados anônimos, mantendo os rótulos simples.
 
+## E16 — Reservas (conta gráfica) ✅ (20/11/2026)
+Reserva = marcação do quanto deveria estar guardado × quanto foi guardado. Não mexe no ledger, no caixa nem na DRE (migração `0005_reservas.sql`). Dois tipos: **meta** (valor e data; aporte mensal = alvo ÷ meses, arredondado para cima) e **provisão** (aporte mensal fixo, sem fim).
+| ID | História | Teste de aceite | Arquivos |
+|----|----------|-----------------|----------|
+| 16.1 | Cadastro, aporte e uso (`POST /reserves`, `/reserves/{id}/movements`); uso não passa do saldo; arquivar | Meta exige alvo e data; provisão exige aporte; nome ativo único; arquivada não recebe movimento | B reserves.py, app.py, models.py, schema.sql, migração 0005 |
+| 16.2 | Linha necessária e status: meta sobe em reta até o mês-alvo, provisão acumula aporte × meses; só meses fechados contam; falta = necessário − aportado (uso baixa o saldo, não cria falta); atraso em meses; em dia (<0,5), atenção (<2), déficit (≥2); resumo "você se deve", aporte mensal que mantém o ritmo e valor a mais por mês para zerar em 12 meses | Tabela de casos de meta e provisão; meta vencida cobra o alvo inteiro | B reserves.py |
+| 16.3 | Tela Reservas: painel com o total em falta, barra por reserva (aportado × linha necessária), aportar/usar, nova reserva, arquivar; menu "Reservas" | Erro aparece na tela; aporte muda o status | B app.py, F reserves.html |
+
+Próximo: **16.4 Bens e depreciação** (bem com valor, vida útil e residual; despesa mensal não-caixa na DRE; a depreciação acumulada vira mais uma linha necessária, vinculada a uma reserva) e **16.5 alerta no caixa/orçamento** (aportes necessários como compromisso na projeção; "caixa livre" = caixa − reservado).
+
 ## E10 Migração para Vercel + Neon ⬜ (plano em `docs/MIGRACAO_VERCEL_NEON.md`)
 M0 ✅ Postgres de teste (compose + CI) · M1 ✅ `schema_pg.sql` + testes parametrizados (197 verdes no PG, 52 na lista da M2) · M2 ✅ SQL cru e casts (PG 249 verdes, CI bloqueante nos dois bancos) · M3 ✅ migrações fora da partida (`python -m salim.migrate [--seed]`, lock consultivo, 1 transação por arquivo; PG 256 verdes) · M4 ✅ estado do bot em tabelas `bot_pending`/`bot_seen` (PG 264 verdes) · M5 ✅ trava de login em tabela `login_throttle` (PG 268 verdes) · M6 ✅ fuso America/Sao_Paulo (`salim.clock.today`, PG 274 verdes) · M7 ✅ engine serverless (NullPool, SSL, retry de cold start, `DATABASE_URL`; falta só a conexão com o Neon real) · M8 🟡 deploy Vercel + webhook Telegram (código pronto: `api/index.py`, `vercel.json`; falta Neon + variáveis + deploy + `setWebhook`) · M9 backup `pg_dump` no GitHub Actions + restauração · M10 corte (remove SQLite)
 

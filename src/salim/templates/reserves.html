@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Reservas · Salim{% endblock %}
+{% block content %}
+<h1>Reservas <span class="muted" style="font-size:.9rem">conta gráfica: o que você deveria ter guardado × o que guardou · {{ hoje.isoformat() | data }}</span></h1>
+{% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+<style>
+  .rbar { position: relative; height: 10px; background: #eee; border-radius: 5px; margin: .5rem 0 .3rem; }
+  .rbar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: #5b9a5b; }
+  .rbar .fill.atencao { background: #c9822b; } .rbar .fill.deficit { background: #b42318; }
+  .rbar .line { position: absolute; top: -4px; width: 2px; height: 18px; background: #3b3a37; }
+  .st { font-weight: 600; } .st.em_dia { color: #067647; } .st.atencao { color: #b54708; } .st.deficit { color: #b42318; }
+</style>
+
+{% if resumo.reserves %}
+<div class="card tiles">
+  {% if resumo.total_gap_cents %}
+  <div class="tile"><div class="l">Você se deve</div><div class="v neg">{{ resumo.total_gap_cents | brl }}</div></div>
+  <div class="tile"><div class="l">Para zerar em 12 meses, aporte a mais por mês</div><div class="v">{{ resumo.catch_up_12m_cents | brl }}</div></div>
+  {% else %}
+  <div class="tile"><div class="l">Situação</div><div class="v quitada">Tudo em dia</div></div>
+  {% endif %}
+  <div class="tile"><div class="l">Aporte mensal que mantém o ritmo</div><div class="v">{{ resumo.monthly_needed_cents | brl }}</div></div>
+  <div class="tile"><div class="l">Guardado (saldo das reservas)</div><div class="v">{{ resumo.total_balance_cents | brl }}</div></div>
+</div>
+{% if resumo.total_gap_cents %}<p class="muted">O mais atrasado: <b>{{ resumo.worst.name }}</b>, {{ resumo.worst.months_behind | string | replace('.', ',') }} meses de aporte. Se você não repõe, ou o padrão de gasto baixa, ou o problema aparece na hora de usar.</p>{% endif %}
+{% endif %}
+
+{% for r in resumo.reserves %}
+{% set escala = [r.target_cents or 0, r.required_cents, r.funded_cents, 1] | max %}
+<div class="card">
+  <h2>{{ r.name }} <span class="muted" style="font-size:.85rem">{{ 'meta' if r.kind == 'goal' else 'provisão' }}
+    {% if r.kind == 'goal' %}· {{ r.target_cents | brl }} até {{ r.target_date.isoformat() | mes }}{% else %}· sem prazo{% endif %}
+    · {{ r.monthly_cents | brl }}/mês</span></h2>
+  <div class="rbar" title="Aportado {{ r.funded_cents | brl }} · deveria ter {{ r.required_cents | brl }}">
+    <div class="fill {{ r.state }}" style="width:{{ (100 * r.funded_cents / escala) | round(1) }}%"></div>
+    <div class="line" style="left:{{ (100 * r.required_cents / escala) | round(1) }}%"></div></div>
+  <p style="margin:.2rem 0"><span class="st {{ r.state }}">{{ {'em_dia': 'em dia', 'atencao': 'atenção', 'deficit': 'em déficit'}[r.state] }}</span>
+    · aportado {{ r.funded_cents | brl }} · deveria ter {{ r.required_cents | brl }}
+    {% if r.gap_cents %}· <b class="neg">falta {{ r.gap_cents | brl }}</b> ({{ r.months_behind | string | replace('.', ',') }} meses de aporte){% endif %}
+    · saldo {{ r.balance_cents | brl }}{% if r.used_cents %} (usado {{ r.used_cents | brl }}){% endif %}</p>
+  <details class="inline"><summary>aportar ou usar</summary>
+    <form method="post" action="/ui/reserves/{{ r.id }}/movements" style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:end">
+      <label>Tipo <select name="kind"><option value="aporte">aporte</option><option value="uso">uso</option></select></label>
+      <label>Valor <input class="val" name="amount" placeholder="{{ (r.monthly_cents | num) }}" required></label>
+      <label>Data <input type="date" name="movement_date" value="{{ hoje.isoformat() }}"></label>
+      <label>Nota <input name="note" placeholder="opcional"></label>
+      <button>Registrar</button></form></details>
+  <form method="post" action="/ui/reserves/{{ r.id }}/archive" style="display:inline"><button class="lnk">arquivar</button></form>
+</div>
+{% else %}
+<p class="muted">Nenhuma reserva ainda. Crie uma meta (viagem, troca de carro) ou uma provisão (manutenção, IPVA).</p>
+{% endfor %}
+
+<div class="card"><h2>Nova reserva</h2>
+  <form method="post" action="/ui/reserves" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:end">
+    <label>Nome <input name="name" value="{{ form.get('name', '') }}" required></label>
+    <label>Tipo <select name="kind"><option value="goal">meta (valor e data)</option>
+      <option value="provision" {{ 'selected' if form.get('kind') == 'provision' }}>provisão (aporte mensal)</option></select></label>
+    <label>Valor-alvo (meta) <input class="val" name="target" value="{{ form.get('target', '') }}" placeholder="12.000,00"></label>
+    <label>Data-alvo (meta) <input type="date" name="target_date" value="{{ form.get('target_date', '') }}"></label>
+    <label>Aporte mensal (provisão) <input class="val" name="monthly" value="{{ form.get('monthly', '') }}" placeholder="300,00"></label>
+    <label>Começa em <input type="date" name="start_month" value="{{ form.get('start_month', '') }}"></label>
+    <button>Criar reserva</button></form>
+  <p class="muted" style="font-size:.85rem">Meta: o aporte mensal sai do valor e do prazo. Provisão: você define o aporte e ele acumula sem fim. O dinheiro continua nas suas contas; aqui só se controla quanto deveria estar separado. Só meses fechados contam na cobrança. "Em dia" = menos de meio mês de atraso; "déficit" = 2 meses ou mais.</p>
+</div>
+{% endblock %}

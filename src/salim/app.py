@@ -18,7 +18,7 @@ from salim.money import brl, parse_brl
 from salim.auth import AuthConfig, LoginLimiter, make_session, read_session, verify_password
 from salim.channels import WhatsAppChannel, WhatsAppSender
 from salim.telegram import Bot, HttpSender
-from salim import cards, chartcfg, bankimport as imp, budget as bud, budgetplan, ledger, obligations as obl, reports, viz
+from salim import cards, chartcfg, bankimport as imp, budget as bud, budgetplan, reserves as rsv, ledger, obligations as obl, reports, viz
 from salim.chart import seed_chart
 from salim.clock import today as clock_today
 from salim.db import make_session_factory
@@ -192,8 +192,26 @@ def business_errors():
         raise HTTPException(409, f"conta já existe: {e}")
     except ledger.AccountNotFoundError as e:
         raise HTTPException(422, f"conta inexistente: {e}")
-    except (ledger.InvalidAccountError, ledger.InvalidTransactionError, obl.ObligationError, bud.BudgetError, imp.ImportError_) as e:
+    except rsv.ReserveNotFound as e:
+        raise HTTPException(404, str(e))
+    except (rsv.ReserveError, ledger.InvalidAccountError, ledger.InvalidTransactionError, obl.ObligationError, bud.BudgetError, imp.ImportError_) as e:
         raise HTTPException(422, str(e))
+
+
+class ReserveIn(BaseModel):
+    name: str
+    kind: str
+    target_cents: int | None = None
+    target_date: date | None = None
+    monthly_cents: int | None = None
+    start_month: date | None = None
+
+
+class MovementIn(BaseModel):
+    kind: str
+    amount_cents: int
+    movement_date: date
+    note: str | None = None
 
 
 class BudgetIn(BaseModel):
@@ -444,6 +462,75 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
     def chart_move_line(code: str, body: MoveIn, session=Depends(get_session)):
         with business_errors():
             return _conta_json(chartcfg.move_line(session, code, body.group_code))
+
+    @app.post("/reserves", status_code=201)
+    def new_reserve(body: ReserveIn, session=Depends(get_session)):
+        with business_errors():
+            r = rsv.create_reserve(session, **body.model_dump())
+            return asdict(rsv.reserve_status(session, r.id, clock_today()))
+
+    @app.get("/reserves")
+    def list_reserves(today: date | None = None, session=Depends(get_session)):
+        resumo = rsv.summary(session, today or clock_today())
+        return {"summary": {k: v for k, v in asdict(resumo).items() if k != "reserves"}, "reserves": [asdict(r) for r in resumo.reserves]}
+
+    @app.post("/reserves/{reserve_id}/movements", status_code=201)
+    def new_reserve_movement(reserve_id: int, body: MovementIn, session=Depends(get_session)):
+        with business_errors():
+            m = rsv.add_movement(session, reserve_id, **body.model_dump())
+            return {"id": m.id, **asdict(rsv.reserve_status(session, reserve_id, clock_today()))}
+
+    def _reserves_page(request, session, hoje, erro=None, status=200, form=None):
+        return templates.TemplateResponse(request, "reserves.html", {
+            "resumo": rsv.summary(session, hoje), "hoje": hoje, "erro": erro, "form": form or {}}, status_code=status)
+
+    @app.get("/ui/reserves")
+    def ui_reserves(request: Request, today: date | None = None, session=Depends(get_session)):
+        return _reserves_page(request, session, today or clock_today())
+
+    def _valor(texto: str, vazio_ok=True) -> int | None:
+        if not (texto or "").strip():
+            return None
+        try:
+            return parse_brl(texto)
+        except ValueError:
+            raise HTTPException(422, "valor inválido")
+
+    @app.post("/ui/reserves")
+    async def ui_new_reserve(request: Request, session=Depends(get_session)):
+        f = {k: v.strip() for k, v in (await request.form()).items()}
+        try:
+            with business_errors():
+                rsv.create_reserve(
+                    session, name=f.get("name", ""), kind=f.get("kind", "goal"), target_cents=_valor(f.get("target", "")),
+                    monthly_cents=_valor(f.get("monthly", "")),
+                    target_date=date.fromisoformat(f["target_date"]) if f.get("target_date") else None,
+                    start_month=date.fromisoformat(f["start_month"]) if f.get("start_month") else None)
+        except ValueError:
+            return _reserves_page(request, session, clock_today(), "data inválida", 422, f)
+        except HTTPException as e:
+            return _reserves_page(request, session, clock_today(), e.detail, 422, f)
+        return RedirectResponse("/ui/reserves", status_code=303)
+
+    @app.post("/ui/reserves/{reserve_id}/movements")
+    async def ui_reserve_movement(reserve_id: int, request: Request, session=Depends(get_session)):
+        f = {k: v.strip() for k, v in (await request.form()).items()}
+        try:
+            with business_errors():
+                rsv.add_movement(session, reserve_id, kind=f.get("kind", ""), amount_cents=_valor(f.get("amount", "")) or 0,
+                                 movement_date=date.fromisoformat(f["movement_date"]) if f.get("movement_date") else clock_today(),
+                                 note=f.get("note"))
+        except ValueError:
+            return _reserves_page(request, session, clock_today(), "data inválida", 422)
+        except HTTPException as e:
+            return _reserves_page(request, session, clock_today(), e.detail, 422 if e.status_code != 404 else 404)
+        return RedirectResponse("/ui/reserves", status_code=303)
+
+    @app.post("/ui/reserves/{reserve_id}/archive")
+    def ui_archive_reserve(reserve_id: int, session=Depends(get_session)):
+        with business_errors():
+            rsv.archive_reserve(session, reserve_id)
+        return RedirectResponse("/ui/reserves", status_code=303)
 
     @app.post("/cards", status_code=201)
     def new_card(body: CardIn, session=Depends(get_session)):

@@ -111,6 +111,27 @@ CREATE TABLE login_throttle (
   locked_until REAL NOT NULL DEFAULT 0
 );
 
+-- 9. RESERVAS (conta gráfica: não mexe no ledger nem no caixa; só compara o que deveria estar guardado com o que foi) --
+CREATE TABLE reserves (
+  id           INTEGER PRIMARY KEY,
+  name         TEXT NOT NULL,
+  kind         TEXT NOT NULL CHECK (kind IN ('goal','provision')),
+  target_cents INTEGER CHECK (target_cents IS NULL OR target_cents > 0),
+  target_date  TEXT,
+  monthly_cents INTEGER NOT NULL CHECK (monthly_cents > 0),
+  start_month  TEXT NOT NULL CHECK (start_month = date(start_month, 'start of month')),
+  archived     INTEGER NOT NULL DEFAULT 0,
+  CHECK ((kind = 'goal') = (target_cents IS NOT NULL AND target_date IS NOT NULL))
+);
+CREATE TABLE reserve_movements (
+  id             INTEGER PRIMARY KEY,
+  reserve_id     INTEGER NOT NULL REFERENCES reserves(id),
+  movement_date  TEXT NOT NULL,
+  amount_cents   INTEGER NOT NULL CHECK (amount_cents <> 0),   -- aporte > 0, uso < 0
+  note           TEXT,
+  transaction_id INTEGER REFERENCES transactions(id)
+);
+
 -- INTEGRIDADE NO BANCO ---------------------------------------------------------
 CREATE TRIGGER trg_posting_rules BEFORE INSERT ON postings
 BEGIN
