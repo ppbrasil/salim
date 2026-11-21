@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Reservas · Salim{% endblock %}
 {% block content %}
+{% set NOMES = {"carro": "carro", "computador": "computador", "celular": "celular", "eletrodomestico": "eletrodoméstico", "outro": "outro bem"} %}
 <h1>Reservas <span class="muted" style="font-size:.9rem">conta gráfica: o que você deveria ter guardado × o que guardou · {{ hoje.isoformat() | data }}</span></h1>
 {% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
 <style>
@@ -28,9 +29,13 @@
 {% for r in resumo.reserves %}
 {% set escala = [r.target_cents or 0, r.required_cents, r.funded_cents, 1] | max %}
 <div class="card">
-  <h2>{{ r.name }} <span class="muted" style="font-size:.85rem">{{ 'meta' if r.kind == 'goal' else 'provisão' }}
-    {% if r.kind == 'goal' %}· {{ r.target_cents | brl }} até {{ r.target_date.isoformat() | mes }}{% else %}· sem prazo{% endif %}
-    · {{ r.monthly_cents | brl }}/mês</span></h2>
+  <h2>{{ r.name }} <span class="muted" style="font-size:.85rem">
+    {% if r.is_replacement %}troca · {{ NOMES[r.category] }} · em {{ r.target_date.isoformat() | mes }}
+    {% elif r.kind == 'goal' %}objetivo · {{ r.target_cents | brl }} até {{ r.target_date.isoformat() | mes }}
+    {% else %}manutenção e imprevistos · sem prazo{% endif %}
+    · guardar {{ r.monthly_cents | brl }}/mês</span></h2>
+  {% if r.is_replacement %}<p class="muted" style="margin:.1rem 0">Um novo custa {{ r.new_price_cents | brl }} hoje; o seu usado, na data da troca, vale {{ r.resale_cents | brl }}.
+    Você perde <b>{{ r.target_cents | brl }}</b> nessa troca: é isso que precisa ir sendo guardado.</p>{% endif %}
   <div class="rbar" title="Aportado {{ r.funded_cents | brl }} · deveria ter {{ r.required_cents | brl }}">
     <div class="fill {{ r.state }}" style="width:{{ (100 * r.funded_cents / escala) | round(1) }}%"></div>
     <div class="line" style="left:{{ (100 * r.required_cents / escala) | round(1) }}%"></div></div>
@@ -52,15 +57,35 @@
 {% endfor %}
 
 <div class="card"><h2>Nova reserva</h2>
-  <form method="post" action="/ui/reserves" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:end">
-    <label>Nome <input name="name" value="{{ form.get('name', '') }}" required></label>
-    <label>Tipo <select name="kind"><option value="goal">meta (valor e data)</option>
-      <option value="provision" {{ 'selected' if form.get('kind') == 'provision' }}>provisão (aporte mensal)</option></select></label>
-    <label>Valor-alvo (meta) <input class="val" name="target" value="{{ form.get('target', '') }}" placeholder="12.000,00"></label>
-    <label>Data-alvo (meta) <input type="date" name="target_date" value="{{ form.get('target_date', '') }}"></label>
-    <label>Aporte mensal (provisão) <input class="val" name="monthly" value="{{ form.get('monthly', '') }}" placeholder="300,00"></label>
-    <label>Começa em <input type="date" name="start_month" value="{{ form.get('start_month', '') }}"></label>
-    <button>Criar reserva</button></form>
-  <p class="muted" style="font-size:.85rem">Meta: o aporte mensal sai do valor e do prazo. Provisão: você define o aporte e ele acumula sem fim. O dinheiro continua nas suas contas; aqui só se controla quanto deveria estar separado. Só meses fechados contam na cobrança. "Em dia" = menos de meio mês de atraso; "déficit" = 2 meses ou mais.</p>
+  <p class="muted" style="margin-top:0">O dinheiro continua nas suas contas; aqui você só controla quanto já deveria estar separado. Só meses fechados contam na cobrança: "em dia" é menos de meio mês de atraso, "déficit" é 2 meses ou mais.</p>
+
+  <details class="inline" {{ 'open' if form.get('kind') == 'replacement' }}><summary><b>Vou trocar um bem</b> (carro, computador, celular, eletrodoméstico)</summary>
+    <form method="post" action="/ui/reserves" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:end;margin:.5rem 0">
+      <input type="hidden" name="kind" value="replacement">
+      <label>O que é? <select name="category">{% for k, n in NOMES.items() %}<option value="{{ k }}" {{ 'selected' if form.get('category') == k }}>{{ n }}</option>{% endfor %}</select></label>
+      <label>Nome <input name="name" value="{{ form.get('name', '') if form.get('kind') == 'replacement' }}" placeholder="Meu carro" required></label>
+      <label>Quando pretende trocar? <input type="date" name="target_date" value="{{ form.get('target_date', '') if form.get('kind') == 'replacement' }}" required></label>
+      <label>Quanto custa um novo hoje? <input class="val" name="new_price" value="{{ form.get('new_price', '') }}" placeholder="100.000,00" required></label>
+      <label>Por quanto venderia o seu? <input class="val" name="resale" value="{{ form.get('resale', '') }}" placeholder="60.000,00" required></label>
+      <label>Comprou em (se já tem) <input type="date" name="start_month" value="{{ form.get('start_month', '') if form.get('kind') == 'replacement' }}"></label>
+      <button>Criar</button></form>
+    <p class="muted" style="font-size:.85rem;margin:0 0 .6rem">"Por quanto venderia" é o que um igual ao seu vale <b>hoje com a idade que o seu terá na data da troca</b> (por exemplo, quanto vale hoje um carro de 4 anos, se você troca em 4). Pesquise em anúncios ou na tabela FIPE. A diferença entre o novo e o usado é o que você perde, e dividida pelos meses até a troca dá quanto guardar por mês. Se o bem já é seu, informe quando comprou: o sistema mostra quanto já deveria ter guardado até hoje. Carro? Crie também uma reserva de manutenção abaixo.</p></details>
+
+  <details class="inline" {{ 'open' if form.get('kind') == 'goal' }}><summary><b>Quero juntar para um objetivo</b> (viagem, reforma, entrada)</summary>
+    <form method="post" action="/ui/reserves" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:end;margin:.5rem 0">
+      <input type="hidden" name="kind" value="goal">
+      <label>Nome <input name="name" value="{{ form.get('name', '') if form.get('kind') == 'goal' }}" placeholder="Viagem" required></label>
+      <label>Quanto? <input class="val" name="target" value="{{ form.get('target', '') }}" placeholder="12.000,00" required></label>
+      <label>Até quando? <input type="date" name="target_date" value="{{ form.get('target_date', '') if form.get('kind') == 'goal' }}" required></label>
+      <label>Começa em <input type="date" name="start_month" value="{{ form.get('start_month', '') if form.get('kind') == 'goal' }}"></label>
+      <button>Criar</button></form></details>
+
+  <details class="inline" {{ 'open' if form.get('kind') == 'provision' }}><summary><b>Quero separar todo mês para manutenção e imprevistos</b> (consertos, IPVA, seguro)</summary>
+    <form method="post" action="/ui/reserves" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:end;margin:.5rem 0">
+      <input type="hidden" name="kind" value="provision">
+      <label>Nome <input name="name" value="{{ form.get('name', '') if form.get('kind') == 'provision' }}" placeholder="Manutenção do carro" required></label>
+      <label>Quanto por mês? <input class="val" name="monthly" value="{{ form.get('monthly', '') }}" placeholder="300,00" required></label>
+      <label>Começa em <input type="date" name="start_month" value="{{ form.get('start_month', '') if form.get('kind') == 'provision' }}"></label>
+      <button>Criar</button></form></details>
 </div>
 {% endblock %}

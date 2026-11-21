@@ -98,6 +98,9 @@ class Reserve(Base):
     monthly_cents: Mapped[int]
     start_month: Mapped[date] = mapped_column(Date)
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    category: Mapped[str | None] = mapped_column(String, nullable=True)
+    new_price_cents: Mapped[int | None] = mapped_column(nullable=True)
+    resale_cents: Mapped[int | None] = mapped_column(nullable=True)
 
 
 class ReserveMovement(Base):

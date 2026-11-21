@@ -49,7 +49,7 @@ def test_cadastro_invalido_mostra_erro_e_nao_grava(client):
 def test_provisao_e_arquivar(client):
     client.post("/ui/reserves", data={"name": "Manutenção", "kind": "provision", "monthly": "300,00", "start_month": "2026-05-01"})
     html = client.get("/ui/reserves", params=HOJE).text
-    assert "Manutenção" in html and "provisão" in html
+    assert "Manutenção" in html and "manutenção e imprevistos · sem prazo" in html
     rid = client.get("/reserves", params=HOJE).json()["reserves"][0]["id"]
     assert client.post(f"/ui/reserves/{rid}/archive", follow_redirects=False).status_code == 303
     assert "Nenhuma reserva" in client.get("/ui/reserves", params=HOJE).text

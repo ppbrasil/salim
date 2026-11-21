@@ -121,6 +121,9 @@ CREATE TABLE reserves (
   monthly_cents INTEGER NOT NULL CHECK (monthly_cents > 0),
   start_month  TEXT NOT NULL CHECK (start_month = date(start_month, 'start of month')),
   archived     INTEGER NOT NULL DEFAULT 0,
+  category     TEXT,                                            -- só troca de bem: carro, computador, celular...
+  new_price_cents INTEGER CHECK (new_price_cents IS NULL OR new_price_cents > 0),   -- só troca: quanto custa um novo hoje
+  resale_cents    INTEGER CHECK (resale_cents IS NULL OR resale_cents >= 0),        -- só troca: por quanto venderia o usado
   CHECK ((kind = 'goal') = (target_cents IS NOT NULL AND target_date IS NOT NULL))
 );
 CREATE TABLE reserve_movements (

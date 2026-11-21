@@ -3,15 +3,19 @@
 Não mexe no ledger, no caixa nem na DRE: o dinheiro continua nas contas reais; a reserva é uma marcação com aportes e
 usos. O gasto de verdade (a viagem, o conserto) é lançado normalmente; o "uso" só baixa a marcação.
 
-Dois tipos:
+Três tipos (os dois primeiros ficam gravados como "goal"):
 - meta (goal): valor-alvo numa data. A linha necessária sobe em reta do mês de início até o mês-alvo; o aporte mensal é
   alvo / meses (arredondado para cima).
+- troca de um bem (replacement): o que vai trocar (carro, computador, celular...), quando, quanto custa um novo hoje e
+  por quanto venderia o usado. O alvo é a perda: novo − usado. Se o bem já existe, "começa em" é o mês da compra e a
+  reserva já nasce com a parte vencida em falta (é o que você deveria ter guardado até hoje).
 - provisão (provision): aporte mensal fixo, sem fim. A linha necessária é aporte mensal × meses fechados desde o início.
 
 Linha necessária: só conta meses fechados (o mês corrente ainda pode receber o aporte). Falta = necessário − total
 aportado (os usos baixam o saldo, não criam falta). Atraso em meses = falta / aporte mensal.
 Estado: em_dia (< 0,5 mês), atencao (< 2 meses), deficit (≥ 2 meses). Limites são convenção, ajustáveis aqui.
 """
+import unicodedata
 from dataclasses import dataclass
 from datetime import date
 
@@ -23,7 +27,8 @@ from salim.db import sum_cents
 from salim.ledger import month_start
 from salim.models import Reserve, ReserveMovement
 
-TIPOS = ("goal", "provision")
+TIPOS = ("goal", "provision", "replacement")
+CATEGORIAS = ("carro", "computador", "celular", "eletrodomestico", "outro")
 ATENCAO_MESES = 0.5
 DEFICIT_MESES = 2.0
 
@@ -55,6 +60,10 @@ class ReserveStatus:
     gap_cents: int
     months_behind: float
     state: str                    # em_dia | atencao | deficit
+    category: str | None = None   # só troca de bem
+    new_price_cents: int | None = None
+    resale_cents: int | None = None
+    is_replacement: bool = False
 
 
 @dataclass
@@ -73,17 +82,38 @@ def _meses(a: date, b: date) -> int:
     return (b.year * 12 + b.month) - (a.year * 12 + a.month)
 
 
+def _categoria(texto: str | None) -> str | None:
+    t = "".join(c for c in unicodedata.normalize("NFD", (texto or "").lower().strip()) if unicodedata.category(c) != "Mn")
+    return t if t in CATEGORIAS else None
+
+
 def create_reserve(session: Session, *, name: str, kind: str, start_month: date | None = None,
                    target_cents: int | None = None, target_date: date | None = None,
-                   monthly_cents: int | None = None) -> Reserve:
+                   monthly_cents: int | None = None, category: str | None = None,
+                   new_price_cents: int | None = None, resale_cents: int | None = None) -> Reserve:
     nome = (name or "").strip()
     if not nome:
         raise ReserveError("nome da reserva não pode ser vazio")
     if kind not in TIPOS:
-        raise ReserveError("tipo inválido: use meta (goal) ou provisão (provision)")
+        raise ReserveError("tipo inválido: use meta (goal), troca de um bem (replacement) ou provisão (provision)")
     inicio = month_start(start_month or clock_today())
     if session.execute(select(Reserve.id).where(Reserve.name == nome, Reserve.archived.is_(False))).first():
         raise ReserveError(f"já existe uma reserva ativa chamada {nome!r}")
+    extras = {}
+    if kind == "replacement":
+        cat = _categoria(category)
+        if cat is None:
+            raise ReserveError("diga o que vai trocar: carro, computador, celular, eletrodoméstico ou outro")
+        if not new_price_cents or new_price_cents <= 0:
+            raise ReserveError("diga quanto custa um novo hoje")
+        if resale_cents is None or resale_cents < 0:
+            raise ReserveError("diga por quanto venderia o seu usado (pode ser zero)")
+        if resale_cents >= new_price_cents:
+            raise ReserveError("o usado vale tanto quanto um novo: nada a guardar")
+        if target_date is None:
+            raise ReserveError("diga quando pretende trocar")
+        extras = dict(category=cat, new_price_cents=new_price_cents, resale_cents=resale_cents)
+        target_cents, kind = new_price_cents - resale_cents, "goal"
     if kind == "goal":
         if not target_cents or target_cents <= 0:
             raise ReserveError("meta exige valor-alvo maior que zero")
@@ -94,7 +124,7 @@ def create_reserve(session: Session, *, name: str, kind: str, start_month: date 
         n = _meses(inicio, month_start(target_date)) + 1
         mensal = -(-target_cents // n)
         r = Reserve(name=nome, kind=kind, target_cents=target_cents, target_date=target_date, monthly_cents=mensal,
-                    start_month=inicio)
+                    start_month=inicio, **extras)
     else:
         if not monthly_cents or monthly_cents <= 0:
             raise ReserveError("provisão exige aporte mensal maior que zero")
@@ -163,7 +193,8 @@ def _status(session: Session, r: Reserve, today: date) -> ReserveStatus:
     atraso = round(falta / r.monthly_cents, 1)
     estado = "deficit" if atraso >= DEFICIT_MESES else "atencao" if atraso >= ATENCAO_MESES else "em_dia"
     return ReserveStatus(r.id, r.name, r.kind, r.monthly_cents, r.start_month, r.target_cents, r.target_date, fechados,
-                         total, left, necessario, aportado, usado, aportado - usado, falta, atraso, estado)
+                         total, left, necessario, aportado, usado, aportado - usado, falta, atraso, estado,
+                         r.category, r.new_price_cents, r.resale_cents, r.new_price_cents is not None)
 
 
 def summary(session: Session, today: date) -> ReserveSummary:

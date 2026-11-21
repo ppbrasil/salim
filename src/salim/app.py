@@ -205,6 +205,9 @@ class ReserveIn(BaseModel):
     target_date: date | None = None
     monthly_cents: int | None = None
     start_month: date | None = None
+    category: str | None = None
+    new_price_cents: int | None = None
+    resale_cents: int | None = None
 
 
 class MovementIn(BaseModel):
@@ -503,7 +506,8 @@ def create_app(session_factory=None, *, auth=_UNSET, telegram_sender=None, teleg
             with business_errors():
                 rsv.create_reserve(
                     session, name=f.get("name", ""), kind=f.get("kind", "goal"), target_cents=_valor(f.get("target", "")),
-                    monthly_cents=_valor(f.get("monthly", "")),
+                    monthly_cents=_valor(f.get("monthly", "")), category=f.get("category"),
+                    new_price_cents=_valor(f.get("new_price", "")), resale_cents=_valor(f.get("resale", "")),
                     target_date=date.fromisoformat(f["target_date"]) if f.get("target_date") else None,
                     start_month=date.fromisoformat(f["start_month"]) if f.get("start_month") else None)
         except ValueError:
